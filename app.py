@@ -105,7 +105,7 @@ if uploaded_file is not None:
         to_str = end_date.strftime("%d/%m/%Y")
 
         # ---------------------------------------------------------------------
-        # REPORT 1: DAYWISE PENDING REPORT (Exact code requested)
+        # REPORT 1: DAYWISE PENDING REPORT
         # ---------------------------------------------------------------------
         with tab1:
             # Filter 1: By Status
@@ -257,13 +257,13 @@ if uploaded_file is not None:
             )
 
         # ---------------------------------------------------------------------
-        # REPORT 2: STAGE & OFFICER-WISE SUMMARY REPORT (FIXED YES/NO & JAMA)
+        # REPORT 2: STAGE & OFFICER-WISE SUMMARY REPORT
         # ---------------------------------------------------------------------
         with tab2:
             st.subheader(f"दिनांक {to_str}")
 
-            # Identify Col Q & Col R for Yes/No matching
             col_yn = "क्षेत्र अभिलेखाशी मेळात आहे का?"
+            col_mojni_type = "मोजणीचा प्रकार(Mojni Type)"
 
             taluka_list = sorted(df_raw["तालुका"].dropna().unique().tolist())
             report2_data = []
@@ -289,7 +289,7 @@ if uploaded_file is not None:
                 )
                 off_total = chanani + shirastedar + up_bhoo
 
-                # 1. Yes/No Column Count (Matching Column Q 'क्षेत्र अभिलेखाशी मेळात आहे का?')
+                # 1. Yes/No Count (Col Q)
                 if col_yn in df_t.columns:
                     yes_no = len(df_t[df_t[col_yn].notna() & (df_t[col_yn] != "")])
                 else:
@@ -304,8 +304,11 @@ if uploaded_file is not None:
                     ]
                 )
 
-                # 3. हददी दाखविणेवर Count
-                haddi = len(df_t[df_t["स्थिती"] == "मोजणीची माहिती"])
+                # 3. हददी दाखविणेवर Count (Column B 'मोजणीचा प्रकार(Mojni Type)' == 'ह्द्दकायम')
+                if col_mojni_type in df_t.columns:
+                    haddi = len(df_t[df_t[col_mojni_type] == "ह्द्दकायम"])
+                else:
+                    haddi = len(df_t[df_t["स्थिती"] == "मोजणीची माहिती"])
 
                 # 4. शिल्लक प्रकरणे Count
                 all_active = df_t[~df_t["स्थिती"].isin(completed_defaults)]
