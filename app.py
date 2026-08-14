@@ -58,13 +58,17 @@ if uploaded_file is not None:
     else:
         max_excel_date = max_excel_date.date()
 
-    # --- 1. PENDING PERIOD (DATE RANGE) FILTER ---
+    # --- 1. REPORT 1 DATE RANGE FILTER (SIDEBAR) ---
     st.sidebar.markdown("---")
-    st.sidebar.subheader("📅 Pending Period (कालावधी निवडा)")
+    st.sidebar.subheader("📅 Report 1 कालावधी (Date Range)")
 
     col_d1, col_d2 = st.sidebar.columns(2)
-    start_date = col_d1.date_input("पासून (From)", value=min_excel_date)
-    end_date = col_d2.date_input("पर्यंत (To)", value=datetime.date.today())
+    start_date = col_d1.date_input(
+        "पासून (From)", value=min_excel_date, key="r1_start"
+    )
+    end_date = col_d2.date_input(
+        "पर्यंत (To)", value=datetime.date.today(), key="r1_end"
+    )
 
     # --- 2. STATUS FILTER IN SIDEBAR ---
     st.sidebar.markdown("---")
@@ -219,10 +223,34 @@ if uploaded_file is not None:
             )
 
         # ---------------------------------------------------------------------
-        # REPORT 2: STAGE & OFFICER-WISE SUMMARY REPORT
+        # REPORT 2: STAGE & OFFICER-WISE SUMMARY REPORT (WITH DATE RANGE SELECTOR)
         # ---------------------------------------------------------------------
         with tab2:
-            st.subheader(f"दिनांक {to_str}")
+            st.subheader("📋 Report 2 - टप्पा व अधिकारी निहाय अहवाल")
+
+            # Report 2 Specific Date Selection Controls
+            st.markdown("##### 📅 Report 2 कालावधी निवडा (Select Date Range for Report 2):")
+            col_r2_d1, col_r2_d2 = st.columns(2)
+            r2_start_date = col_r2_d1.date_input(
+                "पासून (From)", value=min_excel_date, key="r2_start"
+            )
+            r2_end_date = col_r2_d2.date_input(
+                "पर्यंत (To)", value=datetime.date.today(), key="r2_end"
+            )
+
+            r2_from_str = r2_start_date.strftime("%d/%m/%Y")
+            r2_to_str = r2_end_date.strftime("%d/%m/%Y")
+
+            st.info(f"🗓️ **Report 2 Period:** {r2_from_str} ते {r2_to_str}")
+
+            # Filter Excel Data by Report 2 selected dates
+            r2_start_dt = pd.to_datetime(r2_start_date)
+            r2_end_dt = pd.to_datetime(r2_end_date)
+
+            df_r2_filtered = df_raw[
+                (df_raw["mojni_date_parsed"] >= r2_start_dt)
+                & (df_raw["mojni_date_parsed"] <= r2_end_dt)
+            ].copy()
 
             col_yn = "क्षेत्र अभिलेखाशी मेळात आहे का?"
             col_mojni_type = "मोजणीचा प्रकार(Mojni Type)"
@@ -231,7 +259,7 @@ if uploaded_file is not None:
             report2_data = []
 
             for tal in taluka_list:
-                df_t = df_raw[df_raw["तालुका"] == tal]
+                df_t = df_r2_filtered[df_r2_filtered["तालुका"] == tal]
 
                 # Officer counts from Status
                 chanani = len(
@@ -372,7 +400,7 @@ if uploaded_file is not None:
                 </style>
             </head>
             <body>
-                <div class="title">दिनांक {to_str}</div>
+                <div class="title">दिनांक {r2_from_str} ते {r2_to_str}</div>
                 <table>
                     <thead>
                         <tr>
@@ -402,7 +430,7 @@ if uploaded_file is not None:
                 label="📥 Download Report 2 PDF",
                 data=pdf_bytes_r2,
                 file_name=(
-                    f"Report_2_{to_str.replace('/', '-')}.pdf"
+                    f"Report_2_{r2_from_str.replace('/', '-')}_to_{r2_to_str.replace('/', '-')}.pdf"
                 ),
                 mime="application/pdf",
             )
