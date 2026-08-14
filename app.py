@@ -9,7 +9,8 @@ st.set_page_config(page_title="E-Mojani Report Generator", layout="wide")
 
 st.title("📊 तालुका व दिवसनिहाय प्रलंबित मोजणी अहवाल")
 st.write(
-    "💡 Raw E-Mojani Excel file upload karein. App automatic 'मोजणी तारीख' se din calculate karke report banaye-ga."
+    "💡 Raw E-Mojani Excel file upload karein. App automatic 'मोजणी तारीख' se"
+    " din calculate karke report banaye-ga."
 )
 
 # 1. File Upload
@@ -19,12 +20,11 @@ uploaded_file = st.file_uploader(
 
 
 def process_excel(file):
-    # Read Excel (skip header if needed, but standard read first)
+    # Read Excel
     df = pd.read_excel(file)
 
     # If first row contains column headers like 'अर्ज क्र.(Application No)'
     if 'मोजणी तारीख' not in df.columns:
-        # Re-read with header=1 if headers are on row 2
         df = pd.read_excel(file, header=1)
 
     # Filter out empty Taluka rows
@@ -32,7 +32,6 @@ def process_excel(file):
         df = df[df['तालुका'].notna() & (df['तालुका'] != '')]
 
     # Convert 'मोजणी तारीख' to datetime
-    # Handles Excel serial date numbers (e.g., 46244) or date strings
     def parse_excel_date(val):
         if pd.isna(val):
             return pd.NaT
@@ -52,7 +51,7 @@ def process_excel(file):
     # Calculate pending days
     df['Pending Days'] = (today - df['mojni_date_parsed']).dt.days
 
-    # Bucket into Day ranges
+    # Bucket into Day ranges (15, 30, 60, 90, 90+)
     def day_bucket(days):
         if pd.isna(days):
             return 'तारीख उपलब्ध नाही'
@@ -60,6 +59,8 @@ def process_excel(file):
             return '15 दिवस वर'
         elif days <= 30:
             return '30 दिवस वर'
+        elif days <= 60:
+            return '60 दिवस वर'
         elif days <= 90:
             return '90 दिवस वर'
         else:
@@ -74,14 +75,16 @@ if uploaded_file is not None:
     with st.spinner('Excel process ho raha hai...'):
         df = process_excel(uploaded_file)
 
-        # Create Pivot Table: Taluka vs Day Buckets
+        # Order of columns in report
         bucket_order = [
             '15 दिवस वर',
             '30 दिवस वर',
+            '60 दिवस वर',
             '90 दिवस वर',
             '90 दिवसांपेक्षा जास्त',
         ]
 
+        # Create Pivot Table: Taluka vs Day Buckets
         pivot_df = pd.crosstab(
             df['तालुका'], df['दिवस वर'], margins=True, margins_name='एकूण'
         )
@@ -132,7 +135,7 @@ if uploaded_file is not None:
                 }}
                 body {{
                     font-family: 'Gargi', 'DejaVu Sans', sans-serif;
-                    font-size: 12px;
+                    font-size: 11px;
                 }}
                 h2 {{
                     text-align: center;
@@ -141,7 +144,7 @@ if uploaded_file is not None:
                 }}
                 .date-header {{
                     text-align: center;
-                    font-size: 14px;
+                    font-size: 13px;
                     font-weight: bold;
                     margin-bottom: 15px;
                 }}
@@ -153,14 +156,14 @@ if uploaded_file is not None:
                 th {{
                     background-color: #2b9348;
                     color: white;
-                    padding: 8px;
+                    padding: 6px;
                     border: 1px solid #555;
-                    font-size: 11px;
+                    font-size: 10px;
                 }}
                 td {{
-                    padding: 6px;
+                    padding: 5px;
                     border: 1px solid #888;
-                    font-size: 11px;
+                    font-size: 10px;
                 }}
                 tr:nth-child(even) {{
                     background-color: #f9f9f9;
