@@ -10,16 +10,13 @@ st.set_page_config(
 
 st.title("📊 तालुका व दिवसनिहाय प्रलंबित मोजणी अहवाल")
 
-# Sidebar - Date Filters
-st.sidebar.header("🗓️ Filter Options")
+# Sidebar - Filters
+st.sidebar.header("⚙️ Filter Options")
 
-# As on Date
-report_date = st.sidebar.date_input("Report Date (आजची / अहवाल तारीख)", datetime.date.today())
+# 1. Report As On Date
+report_date = st.sidebar.date_input("🗓️ Report Date (अहवाल तारीख)", datetime.date.today())
 
-# Status Filter Option
-include_completed = st.sidebar.checkbox("Show Completed Cases (क प्रत / विनाकार्यवाही include karein)", value=False)
-
-# 1. File Upload
+# 2. File Upload
 uploaded_file = st.file_uploader("Upload Raw E-Mojani Excel File (.xlsx)", type=["xlsx"])
 
 
@@ -33,54 +30,69 @@ def parse_excel_date(val):
         return pd.to_datetime(val, errors='coerce')
 
 
-def process_excel(file, as_on_date, filter_completed):
-    df = pd.read_excel(file)
-
-    # Header Detection
-    if 'मोजणी तारीख' not in df.columns:
-        df = pd.read_excel(file, header=1)
-
-    # Filter out empty Taluka rows
-    if 'तालुका' in df.columns:
-        df = df[df['तालुका'].notna() & (df['तालुका'] != '')]
-
-    # Filter Completed Cases if checked off
-    if not filter_completed and 'स्थिती' in df.columns:
-        completed_statuses = ['क प्रत', 'विनाकार्यवाही', 'प्रस्तावित बिगरशेती/गुंठेवारी मोजणी पूर्ण']
-        df = df[~df['स्थिती'].isin(completed_statuses)]
-
-    # Date parsing
-    df['mojni_date_parsed'] = df['मोजणी तारीख'].apply(parse_excel_date)
-
-    # Calculate pending days based on Selected Report Date
-    as_on_dt = pd.to_datetime(as_on_date)
-    df['Pending Days'] = (as_on_dt - df['mojni_date_parsed']).dt.days
-
-    # Remove future date cases if any
-    df = df[df['Pending Days'] >= 0]
-
-    # Day Bucketing
-    def day_bucket(days):
-        if pd.isna(days):
-            return 'तारीख उपलब्ध नाही'
-        if days <= 15:
-            return '15 दिवस वर'
-        elif days <= 30:
-            return '30 दिवस वर'
-        elif days <= 60:
-            return '60 दिवस वर'
-        elif days <= 90:
-            return '90 दिवस वर'
-        else:
-            return '90 दिवसांपेक्षा जास्त'
-
-    df['दिवस वर'] = df['Pending Days'].apply(day_bucket)
-    return df
-
-
 if uploaded_file is not None:
-    with st.spinner('Excel Process aur Calculate ho raha hai...'):
-        df = process_excel(uploaded_file, report_date, include_completed)
+    # Read Excel Data
+    df_raw = pd.read_excel(uploaded_file)
+    if 'मोजणी तारीख' not in df_raw.columns:
+        df_raw = pd.read_excel(uploaded_file, header=1)
+
+    # Filter empty taluka rows
+    if 'तालुका' in df_raw.columns:
+        df_raw = df_raw[df_raw['तालुका'].notna() & (df_raw['तालुका'] != '')]
+
+    # --- STATUS FILTER IN SIDEBAR ---
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📌 स्थिती (Status) Filter")
+
+    # Get unique statuses from Excel
+    all_statuses = df_raw['स्थिती'].dropna().unique().tolist()
+
+    # Default statuses (Excluding completed cases by default)
+    completed_defaults = ['क प्रत', 'विनाकार्यवाही', 'प्रस्तावित बिगरशेती/गुंठेवारी मोजणी पूर्ण']
+    default_selected = [s for s in all_statuses if s not in completed_defaults]
+
+    # Multiselect filter button / dropdown
+    selected_statuses = st.sidebar.multiselect(
+        "Kiski report nikalni hai select karein:",
+        options=all_statuses,
+        default=default_selected
+    )
+
+    # Quick Select Buttons
+    col_btn1, col_btn2 = st.sidebar.columns(2)
+    if col_btn1.button("Select All"):
+        selected_statuses = all_statuses
+    if col_btn2.button("Clear All"):
+        selected_statuses = []
+
+    # --- DATA PROCESSING ---
+    with st.spinner('Data process ho raha hai...'):
+        # Filter by selected Statuses
+        df = df_raw[df_raw['स्थिती'].isin(selected_statuses)].copy()
+
+        # Date Parsing
+        df['mojni_date_parsed'] = df['मोजणी तारीख'].apply(parse_excel_date)
+
+        # Calculate pending days based on Report Date
+        as_on_dt = pd.to_datetime(report_date)
+        df['Pending Days'] = (as_on_dt - df['mojni_date_parsed']).dt.days
+
+        # Bucket into Day ranges
+        def day_bucket(days):
+            if pd.isna(days):
+                return 'तारीख उपलब्ध नाही'
+            if days <= 15:
+                return '15 दिवस वर'
+            elif days <= 30:
+                return '30 दिवस वर'
+            elif days <= 60:
+                return '60 दिवस वर'
+            elif days <= 90:
+                return '90 दिवस वर'
+            else:
+                return '90 दिवसांपेक्षा जास्त'
+
+        df['दिवस वर'] = df['Pending Days'].apply(day_bucket)
 
         bucket_order = [
             '15 दिवस वर',
@@ -90,10 +102,10 @@ if uploaded_file is not None:
             '90 दिवसांपेक्षा जास्त',
         ]
 
-        # Create Pivot Table
+        # Pivot Table Creation
         pivot_df = pd.crosstab(df['तालुका'], df['दिवस वर'], margins=True, margins_name='एकूण')
 
-        # Order Columns
+        # Reorder columns
         existing_cols = [c for c in bucket_order if c in pivot_df.columns]
         if 'तारीख उपलब्ध नाही' in pivot_df.columns:
             existing_cols.append('तारीख उपलब्ध नाही')
@@ -102,17 +114,16 @@ if uploaded_file is not None:
 
         pivot_df = pivot_df[existing_cols]
 
-        st.success(f'✅ Data calculate ho gaya! Total Active Pending Cases: {len(df)}')
+        st.success(f'✅ Total Cases Filtered: **{len(df)}**')
 
-        # Date Range Info
+        # Display Date Range Info
         min_date = df['mojni_date_parsed'].min()
-        max_date = df['mojni_date_parsed'].max()
-        st.info(f"📅 **Pending Period Range:** {min_date.strftime('%d/%m/%Y') if pd.notna(min_date) else 'N/A'} से {report_date.strftime('%d/%m/%Y')} तक")
+        st.info(f"📅 **Pending Period:** {min_date.strftime('%d/%m/%Y') if pd.notna(min_date) else 'N/A'} से {report_date.strftime('%d/%m/%Y')} तक")
 
         st.subheader("📋 तालुका व दिवसनिहाय प्रलंबित प्रकरणे Table")
         st.dataframe(pivot_df, use_container_width=True)
 
-        # HTML / PDF Generation
+        # PDF Generation
         formatted_report_date = report_date.strftime('%d/%m/%Y')
 
         rows_html = ""
