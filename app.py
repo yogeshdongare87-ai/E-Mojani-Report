@@ -296,22 +296,16 @@ if uploaded_file is not None:
                 else:
                     haddi = len(df_t[df_t["स्थिती"] == "मोजणीची माहिती"])
 
-                # 3. जमा करणेवर Count (Status == 'मोजणीची माहिती' AND Mojni Type != 'ह्द्दकायम' OR Status in ['सादर केलेला अर्ज', 'दुरुस्ती लिपिक'])
+                # 3. जमा करणेवर Count (ONLY Status == 'मोजणीची माहिती' AND Mojni Type != 'ह्द्दकायम')
                 if col_mojni_type in df_t.columns:
                     jama = len(
                         df_t[
-                            ((df_t["स्थिती"] == "मोजणीची माहिती") & (df_t[col_mojni_type] != "ह्द्दकायम"))
-                            | (df_t["स्थिती"].isin(["सादर केलेला अर्ज", "दुरुस्ती लिपिक"]))
+                            (df_t["स्थिती"] == "मोजणीची माहिती")
+                            & (df_t[col_mojni_type] != "ह्द्दकायम")
                         ]
                     )
                 else:
-                    jama = len(
-                        df_t[
-                            df_t["स्थिती"].isin(
-                                ["सादर केलेला अर्ज", "दुरुस्ती लिपिक"]
-                            )
-                        ]
-                    )
+                    jama = 0
 
                 # 4. शिल्लक प्रकरणे Count
                 all_active = df_t[~df_t["स्थिती"].isin(completed_defaults)]
@@ -323,8 +317,6 @@ if uploaded_file is not None:
                                 "शिरस्तेदार/मुख्यालय सहाय्यक यांनी तपासले",
                                 "ऊप.अ. भू. अ/ न .भू अ यांच्या मान्यतेवर",
                                 "मोजणीची माहिती",
-                                "सादर केलेला अर्ज",
-                                "दुरुस्ती लिपिक",
                             ]
                         )
                     ]
