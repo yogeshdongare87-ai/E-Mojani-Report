@@ -5,14 +5,15 @@ from weasyprint import HTML
 
 # Page Setup
 st.set_page_config(
-    page_title="E-Mojani Consolidated Report Generator", layout="wide"
+    page_title="E-Mojani Filtered Pending Report Generator", layout="wide"
 )
 
 st.title("📊 भूमि अभिलेख विभाग - प्रलंबित मोजणी अहवाल")
 
-# Sidebar Filters
+# Sidebar - Filters
 st.sidebar.header("⚙️ Filter Options")
 
+# File Upload First (to extract dates & status list dynamically)
 uploaded_file = st.file_uploader(
     "Upload Raw E-Mojani Excel File (.xlsx)", type=["xlsx"]
 )
@@ -36,67 +37,93 @@ if uploaded_file is not None:
     if "मोजणी तारीख" not in df_raw.columns:
         df_raw = pd.read_excel(uploaded_file, header=1)
 
-    # Clean Taluka
+    # Filter empty taluka rows
     if "तालुका" in df_raw.columns:
         df_raw = df_raw[df_raw["तालुका"].notna() & (df_raw["तालुका"] != "")]
 
-    # Date parsing
+    # Parse Dates
     df_raw["mojni_date_parsed"] = df_raw["मोजणी तारीख"].apply(parse_excel_date)
 
-    # Calculate default min and max dates from Excel
-    min_date = df_raw["mojni_date_parsed"].min()
-    max_date = df_raw["mojni_date_parsed"].max()
+    # Min and Max dates from uploaded Excel
+    min_excel_date = df_raw["mojni_date_parsed"].min()
+    max_excel_date = df_raw["mojni_date_parsed"].max()
 
-    default_start = (
-        min_date.date()
-        if pd.notna(min_date)
-        else datetime.date(2023, 1, 1)
-    )
-    default_end = datetime.date.today()
+    if pd.isna(min_excel_date):
+        min_excel_date = datetime.date(2023, 1, 1)
+    else:
+        min_excel_date = min_excel_date.date()
 
-    # --- DATE RANGE SELECTION (कालावधी निवडा) ---
+    if pd.isna(max_excel_date):
+        max_excel_date = datetime.date.today()
+    else:
+        max_excel_date = max_excel_date.date()
+
+    # --- 1. PENDING PERIOD (DATE RANGE) FILTER ---
     st.sidebar.markdown("---")
-    st.sidebar.subheader("📅 अहवाल कालावधी (Date Range)")
+    st.sidebar.subheader("📅 Pending Period (कालावधी निवडा)")
 
     col_d1, col_d2 = st.sidebar.columns(2)
-    start_date = col_d1.date_input("पासून (From)", value=default_start)
-    end_date = col_d2.date_input("पर्यंत (To)", value=default_end)
+    start_date = col_d1.date_input("पासून (From)", value=min_excel_date)
+    end_date = col_d2.date_input("पर्यंत (To)", value=datetime.date.today())
 
-    formatted_start = start_date.strftime("%d/%m/%Y")
-    formatted_end = end_date.strftime("%d/%m/%Y")
+    # --- 2. STATUS FILTER IN SIDEBAR ---
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📌 स्थिती (Status) Filter")
 
-    # Filter Completed Cases
-    completed_statuses = [
+    # Get unique statuses from Excel
+    all_statuses = df_raw["स्थिती"].dropna().unique().tolist()
+
+    # Default statuses (Excluding completed cases by default)
+    completed_defaults = [
         "क प्रत",
         "विनाकार्यवाही",
         "प्रस्तावित बिगरशेती/गुंठेवारी मोजणी पूर्ण",
     ]
+    default_selected = [s for s in all_statuses if s not in completed_defaults]
 
-    # Filter Excel Data between selected Date Range
-    start_dt = pd.to_datetime(start_date)
-    end_dt = pd.to_datetime(end_date)
+    # Multiselect filter button / dropdown
+    selected_statuses = st.sidebar.multiselect(
+        "Kiski report nikalni hai select karein:",
+        options=all_statuses,
+        default=default_selected,
+    )
 
-    df_filtered = df_raw[
-        (df_raw["mojni_date_parsed"] >= start_dt)
-        & (df_raw["mojni_date_parsed"] <= end_dt)
-    ].copy()
+    # Quick Select Buttons
+    col_btn1, col_btn2 = st.sidebar.columns(2)
+    if col_btn1.button("Select All Status"):
+        selected_statuses = all_statuses
+    if col_btn2.button("Clear All Status"):
+        selected_statuses = []
 
-    with st.spinner("Selected Date Range ke hisab se report generate ho rahi hai..."):
+    # --- DATA PROCESSING ---
+    with st.spinner("Data process ho raha hai..."):
         tab1, tab2 = st.tabs(
-            ["📊 Report 1 (दिवसनिहाय)", "📋 Report 2 (टप्पा व अधिकारी निहाय)"]
+            ["📊 Report 1 (तालुका व दिवसनिहाय)", "📋 Report 2 (टप्पा व अधिकारी निहाय)"]
         )
 
+        from_str = start_date.strftime("%d/%m/%Y")
+        to_str = end_date.strftime("%d/%m/%Y")
+
         # ---------------------------------------------------------------------
-        # REPORT 1: DAYWISE PENDING REPORT
+        # REPORT 1: DAYWISE PENDING REPORT (Exact code requested)
         # ---------------------------------------------------------------------
         with tab1:
-            st.subheader(
-                f"1️⃣ तालुका व दिवसनिहाय प्रलंबित प्रकरणे ({formatted_start} ते {formatted_end})"
-            )
+            # Filter 1: By Status
+            df1 = df_raw[df_raw["स्थिती"].isin(selected_statuses)].copy()
 
-            df1 = df_filtered[~df_filtered["स्थिती"].isin(completed_statuses)].copy()
+            # Filter 2: By Date Range
+            start_dt = pd.to_datetime(start_date)
+            end_dt = pd.to_datetime(end_date)
+
+            df1 = df1[
+                (df1["mojni_date_parsed"] >= start_dt)
+                & (df1["mojni_date_parsed"] <= end_dt)
+            ].copy()
+
+            # Calculate pending days
             df1["Pending Days"] = (end_dt - df1["mojni_date_parsed"]).dt.days
 
+            # Bucket into Day ranges
             def day_bucket(days):
                 if pd.isna(days):
                     return "तारीख उपलब्ध नाही"
@@ -112,6 +139,7 @@ if uploaded_file is not None:
                     return "90 दिवसांपेक्षा जास्त"
 
             df1["दिवस वर"] = df1["Pending Days"].apply(day_bucket)
+
             bucket_order = [
                 "15 दिवस वर",
                 "30 दिवस वर",
@@ -120,33 +148,130 @@ if uploaded_file is not None:
                 "90 दिवसांपेक्षा जास्त",
             ]
 
-            pivot1 = pd.crosstab(
-                df1["तालुका"],
-                df1["दिवस वर"],
-                margins=True,
-                margins_name="एकूण",
+            # Pivot Table Creation
+            pivot_df = pd.crosstab(
+                df1["तालुका"], df1["दिवस वर"], margins=True, margins_name="एकूण"
             )
-            cols1 = [c for c in bucket_order if c in pivot1.columns]
-            if "तारीख उपलब्ध नाही" in pivot1.columns:
-                cols1.append("तारीख उपलब्ध नाही")
-            if "एकूण" in pivot1.columns:
-                cols1.append("एकूण")
 
-            pivot1 = pivot1[cols1]
-            st.dataframe(pivot1, use_container_width=True)
+            # Reorder columns
+            existing_cols = [c for c in bucket_order if c in pivot_df.columns]
+            if "तारीख उपलब्ध नाही" in pivot_df.columns:
+                existing_cols.append("तारीख उपलब्ध नाही")
+            if "एकूण" in pivot_df.columns:
+                existing_cols.append("एकूण")
+
+            pivot_df = pivot_df[existing_cols]
+
+            st.success(f"✅ Total Filtered Cases: **{len(df1)}**")
+            st.info(f"📅 **Selected Pending Period:** {from_str} ते {to_str}")
+
+            st.subheader("📋 तालुका व दिवसनिहाय प्रलंबित प्रकरणे Table")
+            st.dataframe(pivot_df, use_container_width=True)
+
+            # PDF Generation
+            rows_html = ""
+            for taluka, row in pivot_df.iterrows():
+                is_total = taluka == "एकूण"
+                tr_style = (
+                    "background-color: #d9f0a3; font-weight: bold;"
+                    if is_total
+                    else ""
+                )
+                tds = f"<td><b>{taluka}</b></td>"
+                for col in existing_cols:
+                    tds += f"<td style='text-align: center;'>{row[col]}</td>"
+                rows_html += f"<tr style='{tr_style}'>{tds}</tr>"
+
+            headers_html = "<th>तालुका</th>" + "".join(
+                [f"<th>{c}</th>" for c in existing_cols]
+            )
+
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    @page {{
+                        size: A4 portrait;
+                        margin: 15mm;
+                    }}
+                    body {{
+                        font-family: 'Gargi', 'DejaVu Sans', sans-serif;
+                        font-size: 11px;
+                    }}
+                    h2 {{
+                        text-align: center;
+                        margin-bottom: 5px;
+                        color: #1b4332;
+                    }}
+                    .date-header {{
+                        text-align: center;
+                        font-size: 13px;
+                        font-weight: bold;
+                        margin-bottom: 15px;
+                    }}
+                    table {{
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-top: 10px;
+                    }}
+                    th {{
+                        background-color: #2b9348;
+                        color: white;
+                        padding: 6px;
+                        border: 1px solid #555;
+                        font-size: 10px;
+                    }}
+                    td {{
+                        padding: 5px;
+                        border: 1px solid #888;
+                        font-size: 10px;
+                    }}
+                    tr:nth-child(even) {{
+                        background-color: #f9f9f9;
+                    }}
+                </style>
+            </head>
+            <body>
+                <h2>भूमि अभिलेख विभाग - अमरावती</h2>
+                <div class="date-header">तालुका व दिवसनिहाय प्रलंबित मोजणी प्रकरणे अहवाल (दिनांक {from_str} ते {to_str})</div>
+                <table>
+                    <thead>
+                        <tr>{headers_html}</tr>
+                    </thead>
+                    <tbody>
+                        {rows_html}
+                    </tbody>
+                </table>
+            </body>
+            </html>
+            """
+
+            pdf_bytes = HTML(string=html_content).write_pdf()
+
+            st.download_button(
+                label="📥 Download PDF Report 1",
+                data=pdf_bytes,
+                file_name=f"Mojani_Pending_Report1_{from_str.replace('/', '-')}_to_{to_str.replace('/', '-')}.pdf",
+                mime="application/pdf",
+            )
 
         # ---------------------------------------------------------------------
-        # REPORT 2: STAGE & OFFICER-WISE SUMMARY REPORT
+        # REPORT 2: STAGE & OFFICER-WISE SUMMARY REPORT (FIXED YES/NO & JAMA)
         # ---------------------------------------------------------------------
         with tab2:
-            st.subheader(f"दिनांक {formatted_start} ते {formatted_end}")
+            st.subheader(f"दिनांक {to_str}")
+
+            # Identify Col Q & Col R for Yes/No matching
+            col_yn = "क्षेत्र अभिलेखाशी मेळात आहे का?"
 
             taluka_list = sorted(df_raw["तालुका"].dropna().unique().tolist())
             report2_data = []
 
             for tal in taluka_list:
-                df_t = df_filtered[df_filtered["तालुका"] == tal]
+                df_t = df_raw[df_raw["तालुका"] == tal]
 
+                # Officer counts from Status
                 chanani = len(
                     df_t[df_t["स्थिती"] == "छाननी लिपिक यांनी तपासले"]
                 )
@@ -164,17 +289,26 @@ if uploaded_file is not None:
                 )
                 off_total = chanani + shirastedar + up_bhoo
 
-                yes_no = len(
+                # 1. Yes/No Column Count (Matching Column Q 'क्षेत्र अभिलेखाशी मेळात आहे का?')
+                if col_yn in df_t.columns:
+                    yes_no = len(df_t[df_t[col_yn].notna() & (df_t[col_yn] != "")])
+                else:
+                    yes_no = 0
+
+                # 2. जमा करणेवर Count
+                jama = len(
                     df_t[
                         df_t["स्थिती"].isin(
-                            ["क्षेत्र अभिलेखाशी मेळात आहे का?"]
+                            ["सादर केलेला अर्ज", "दुरुस्ती लिपिक"]
                         )
                     ]
                 )
-                jama = len(df_t[df_t["स्थिती"] == "सादर केलेला अर्ज"])
+
+                # 3. हददी दाखविणेवर Count
                 haddi = len(df_t[df_t["स्थिती"] == "मोजणीची माहिती"])
 
-                all_active = df_t[~df_t["स्थिती"].isin(completed_statuses)]
+                # 4. शिल्लक प्रकरणे Count
+                all_active = df_t[~df_t["स्थिती"].isin(completed_defaults)]
                 shillak = len(
                     all_active[
                         ~all_active["स्थिती"].isin(
@@ -182,6 +316,9 @@ if uploaded_file is not None:
                                 "छाननी लिपिक यांनी तपासले",
                                 "शिरस्तेदार/मुख्यालय सहाय्यक यांनी तपासले",
                                 "ऊप.अ. भू. अ/ न .भू अ यांच्या मान्यतेवर",
+                                "मोजणीची माहिती",
+                                "सादर केलेला अर्ज",
+                                "दुरुस्ती लिपिक",
                             ]
                         )
                     ]
@@ -265,7 +402,7 @@ if uploaded_file is not None:
                 </style>
             </head>
             <body>
-                <div class="title">दिनांक {formatted_start} ते {formatted_end}</div>
+                <div class="title">दिनांक {to_str}</div>
                 <table>
                     <thead>
                         <tr>
@@ -295,7 +432,7 @@ if uploaded_file is not None:
                 label="📥 Download Report 2 PDF",
                 data=pdf_bytes_r2,
                 file_name=(
-                    f"Report_From_{formatted_start.replace('/', '-')}_to_{formatted_end.replace('/', '-')}.pdf"
+                    f"Report_2_{to_str.replace('/', '-')}.pdf"
                 ),
                 mime="application/pdf",
             )
