@@ -13,7 +13,7 @@ st.title("📊 भूमि अभिलेख विभाग - प्रलं
 # Sidebar - Filters
 st.sidebar.header("⚙️ Filter Options")
 
-# File Upload First (to extract dates & status list dynamically)
+# File Upload First
 uploaded_file = st.file_uploader(
     "Upload Raw E-Mojani Excel File (.xlsx)", type=["xlsx"]
 )
@@ -108,10 +108,8 @@ if uploaded_file is not None:
         # REPORT 1: DAYWISE PENDING REPORT
         # ---------------------------------------------------------------------
         with tab1:
-            # Filter 1: By Status
             df1 = df_raw[df_raw["स्थिती"].isin(selected_statuses)].copy()
 
-            # Filter 2: By Date Range
             start_dt = pd.to_datetime(start_date)
             end_dt = pd.to_datetime(end_date)
 
@@ -120,10 +118,8 @@ if uploaded_file is not None:
                 & (df1["mojni_date_parsed"] <= end_dt)
             ].copy()
 
-            # Calculate pending days
             df1["Pending Days"] = (end_dt - df1["mojni_date_parsed"]).dt.days
 
-            # Bucket into Day ranges
             def day_bucket(days):
                 if pd.isna(days):
                     return "तारीख उपलब्ध नाही"
@@ -148,12 +144,10 @@ if uploaded_file is not None:
                 "90 दिवसांपेक्षा जास्त",
             ]
 
-            # Pivot Table Creation
             pivot_df = pd.crosstab(
                 df1["तालुका"], df1["दिवस वर"], margins=True, margins_name="एकूण"
             )
 
-            # Reorder columns
             existing_cols = [c for c in bucket_order if c in pivot_df.columns]
             if "तारीख उपलब्ध नाही" in pivot_df.columns:
                 existing_cols.append("तारीख उपलब्ध नाही")
@@ -168,7 +162,6 @@ if uploaded_file is not None:
             st.subheader("📋 तालुका व दिवसनिहाय प्रलंबित प्रकरणे Table")
             st.dataframe(pivot_df, use_container_width=True)
 
-            # PDF Generation
             rows_html = ""
             for taluka, row in pivot_df.iterrows():
                 is_total = taluka == "एकूण"
@@ -191,45 +184,14 @@ if uploaded_file is not None:
             <html>
             <head>
                 <style>
-                    @page {{
-                        size: A4 portrait;
-                        margin: 15mm;
-                    }}
-                    body {{
-                        font-family: 'Gargi', 'DejaVu Sans', sans-serif;
-                        font-size: 11px;
-                    }}
-                    h2 {{
-                        text-align: center;
-                        margin-bottom: 5px;
-                        color: #1b4332;
-                    }}
-                    .date-header {{
-                        text-align: center;
-                        font-size: 13px;
-                        font-weight: bold;
-                        margin-bottom: 15px;
-                    }}
-                    table {{
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin-top: 10px;
-                    }}
-                    th {{
-                        background-color: #2b9348;
-                        color: white;
-                        padding: 6px;
-                        border: 1px solid #555;
-                        font-size: 10px;
-                    }}
-                    td {{
-                        padding: 5px;
-                        border: 1px solid #888;
-                        font-size: 10px;
-                    }}
-                    tr:nth-child(even) {{
-                        background-color: #f9f9f9;
-                    }}
+                    @page {{ size: A4 portrait; margin: 15mm; }}
+                    body {{ font-family: 'Gargi', 'DejaVu Sans', sans-serif; font-size: 11px; }}
+                    h2 {{ text-align: center; margin-bottom: 5px; color: #1b4332; }}
+                    .date-header {{ text-align: center; font-size: 13px; font-weight: bold; margin-bottom: 15px; }}
+                    table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                    th {{ background-color: #2b9348; color: white; padding: 6px; border: 1px solid #555; font-size: 10px; }}
+                    td {{ padding: 5px; border: 1px solid #888; font-size: 10px; }}
+                    tr:nth-child(even) {{ background-color: #f9f9f9; }}
                 </style>
             </head>
             <body>
@@ -304,9 +266,14 @@ if uploaded_file is not None:
                     ]
                 )
 
-                # 3. हददी दाखविणेवर Count (Column B 'मोजणीचा प्रकार(Mojni Type)' == 'ह्द्दकायम')
+                # 3. हददी दाखविणेवर Count (Mojni Type == 'ह्द्दकायम' AND Status == 'मोजणीची माहिती')
                 if col_mojni_type in df_t.columns:
-                    haddi = len(df_t[df_t[col_mojni_type] == "ह्द्दकायम"])
+                    haddi = len(
+                        df_t[
+                            (df_t[col_mojni_type] == "ह्द्दकायम")
+                            & (df_t["स्थिती"] == "मोजणीची माहिती")
+                        ]
+                    )
                 else:
                     haddi = len(df_t[df_t["स्थिती"] == "मोजणीची माहिती"])
 
