@@ -223,12 +223,12 @@ if uploaded_file is not None:
             )
 
         # ---------------------------------------------------------------------
-        # REPORT 2: STAGE & OFFICER-WISE SUMMARY REPORT (WITH DATE RANGE SELECTOR)
+        # REPORT 2: STAGE & OFFICER-WISE SUMMARY REPORT
         # ---------------------------------------------------------------------
         with tab2:
             st.subheader("📋 Report 2 - टप्पा व अधिकारी निहाय अहवाल")
 
-            # Report 2 Specific Date Selection Controls
+            # Date Selector for Report 2
             st.markdown("##### 📅 Report 2 कालावधी निवडा (Select Date Range for Report 2):")
             col_r2_d1, col_r2_d2 = st.columns(2)
             r2_start_date = col_r2_d1.date_input(
@@ -285,16 +285,7 @@ if uploaded_file is not None:
                 else:
                     yes_no = 0
 
-                # 2. जमा करणेवर Count
-                jama = len(
-                    df_t[
-                        df_t["स्थिती"].isin(
-                            ["सादर केलेला अर्ज", "दुरुस्ती लिपिक"]
-                        )
-                    ]
-                )
-
-                # 3. हददी दाखविणेवर Count (Mojni Type == 'ह्द्दकायम' AND Status == 'मोजणीची माहिती')
+                # 2. हददी दाखविणेवर Count (Mojni Type == 'ह्द्दकायम' AND Status == 'मोजणीची माहिती')
                 if col_mojni_type in df_t.columns:
                     haddi = len(
                         df_t[
@@ -304,6 +295,23 @@ if uploaded_file is not None:
                     )
                 else:
                     haddi = len(df_t[df_t["स्थिती"] == "मोजणीची माहिती"])
+
+                # 3. जमा करणेवर Count (Status == 'मोजणीची माहिती' AND Mojni Type != 'ह्द्दकायम' OR Status in ['सादर केलेला अर्ज', 'दुरुस्ती लिपिक'])
+                if col_mojni_type in df_t.columns:
+                    jama = len(
+                        df_t[
+                            ((df_t["स्थिती"] == "मोजणीची माहिती") & (df_t[col_mojni_type] != "ह्द्दकायम"))
+                            | (df_t["स्थिती"].isin(["सादर केलेला अर्ज", "दुरुस्ती लिपिक"]))
+                        ]
+                    )
+                else:
+                    jama = len(
+                        df_t[
+                            df_t["स्थिती"].isin(
+                                ["सादर केलेला अर्ज", "दुरुस्ती लिपिक"]
+                            )
+                        ]
+                    )
 
                 # 4. शिल्लक प्रकरणे Count
                 all_active = df_t[~df_t["स्थिती"].isin(completed_defaults)]
