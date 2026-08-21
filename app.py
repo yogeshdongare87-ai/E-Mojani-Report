@@ -13,7 +13,6 @@ st.title("📊 भूमि अभिलेख विभाग - प्रलं
 # Sidebar - Filters
 st.sidebar.header("⚙️ Filter Options")
 
-# File Upload First
 uploaded_file = st.file_uploader(
     "Upload Raw E-Mojani Excel File (.xlsx)", type=["xlsx"]
 )
@@ -37,14 +36,13 @@ if uploaded_file is not None:
     if "मोजणी तारीख" not in df_raw.columns:
         df_raw = pd.read_excel(uploaded_file, header=1)
 
-    # Filter empty taluka rows
+    # Clean empty taluka rows
     if "तालुका" in df_raw.columns:
         df_raw = df_raw[df_raw["तालुका"].notna() & (df_raw["तालुका"] != "")]
 
-    # Parse Dates
+    # Parse Column I (मोजणी तारीख)
     df_raw["mojni_date_parsed"] = df_raw["मोजणी तारीख"].apply(parse_excel_date)
 
-    # Min and Max dates from uploaded Excel
     min_excel_date = df_raw["mojni_date_parsed"].min()
     max_excel_date = df_raw["mojni_date_parsed"].max()
 
@@ -58,7 +56,7 @@ if uploaded_file is not None:
     else:
         max_excel_date = max_excel_date.date()
 
-    # --- 1. REPORT 1 DATE RANGE FILTER (SIDEBAR) ---
+    # --- REPORT 1 SIDEBAR DATES ---
     st.sidebar.markdown("---")
     st.sidebar.subheader("📅 Report 1 कालावधी (Date Range)")
 
@@ -70,14 +68,11 @@ if uploaded_file is not None:
         "पर्यंत (To)", value=datetime.date.today(), key="r1_end"
     )
 
-    # --- 2. STATUS FILTER IN SIDEBAR ---
+    # --- STATUS FILTER IN SIDEBAR ---
     st.sidebar.markdown("---")
     st.sidebar.subheader("📌 स्थिती (Status) Filter")
 
-    # Get unique statuses from Excel
     all_statuses = df_raw["स्थिती"].dropna().unique().tolist()
-
-    # Default statuses (Excluding completed cases by default)
     completed_defaults = [
         "क प्रत",
         "विनाकार्यवाही",
@@ -85,21 +80,12 @@ if uploaded_file is not None:
     ]
     default_selected = [s for s in all_statuses if s not in completed_defaults]
 
-    # Multiselect filter button / dropdown
     selected_statuses = st.sidebar.multiselect(
-        "Kiski report nikalni hai select karein:",
+        "Select Status:",
         options=all_statuses,
         default=default_selected,
     )
 
-    # Quick Select Buttons
-    col_btn1, col_btn2 = st.sidebar.columns(2)
-    if col_btn1.button("Select All Status"):
-        selected_statuses = all_statuses
-    if col_btn2.button("Clear All Status"):
-        selected_statuses = []
-
-    # --- DATA PROCESSING ---
     with st.spinner("Data process ho raha hai..."):
         tab1, tab2 = st.tabs(
             ["📊 Report 1 (तालुका व दिवसनिहाय)", "📋 Report 2 (टप्पा व अधिकारी निहाय)"]
@@ -109,7 +95,7 @@ if uploaded_file is not None:
         to_str = end_date.strftime("%d/%m/%Y")
 
         # ---------------------------------------------------------------------
-        # REPORT 1: DAYWISE PENDING REPORT
+        # REPORT 1
         # ---------------------------------------------------------------------
         with tab1:
             df1 = df_raw[df_raw["स्थिती"].isin(selected_statuses)].copy()
@@ -223,13 +209,11 @@ if uploaded_file is not None:
             )
 
         # ---------------------------------------------------------------------
-        # REPORT 2: STAGE & OFFICER-WISE SUMMARY REPORT
+        # REPORT 2
         # ---------------------------------------------------------------------
         with tab2:
             st.subheader("📋 Report 2 - टप्पा व अधिकारी निहाय अहवाल")
 
-            # Date Selector for Report 2
-            st.markdown("##### 📅 Report 2 कालावधी निवडा (Select Date Range for Stage & Officers):")
             col_r2_d1, col_r2_d2 = st.columns(2)
             r2_start_date = col_r2_d1.date_input(
                 "पासून (From)", value=min_excel_date, key="r2_start"
@@ -238,33 +222,19 @@ if uploaded_file is not None:
                 "पर्यंत (To)", value=datetime.date.today(), key="r2_end"
             )
 
-            # Separate Date selector specifically for "शिल्लक प्रकरणे"
-            st.markdown("##### 📌 **शिल्लक प्रकरणे साठी शेवटची तारीख (Cut-off Date for Shillak Cases):**")
-            shillak_cut_off_date = st.date_input(
-                "शिल्लक प्रकरणे पर्यंत तारीख (Up to Date)", 
-                value=max_excel_date, 
-                key="shillak_cutoff"
-            )
-
             r2_from_str = r2_start_date.strftime("%d/%m/%Y")
             r2_to_str = r2_end_date.strftime("%d/%m/%Y")
-            shillak_date_str = shillak_cut_off_date.strftime("%d/%m/%Y")
 
-            st.info(f"🗓️ **Report Filter Period:** {r2_from_str} ते {r2_to_str} | **शिल्लक प्रकरणे कट-ऑफ तारीख:** {shillak_date_str} पर्यंत")
+            st.info(f"🗓️ **Report 2 Period:** {r2_from_str} ते {r2_to_str}")
 
-            # Filter Excel Data by Report 2 selected dates
             r2_start_dt = pd.to_datetime(r2_start_date)
             r2_end_dt = pd.to_datetime(r2_end_date)
-            shillak_cutoff_dt = pd.to_datetime(shillak_cut_off_date)
+            today_dt = pd.to_datetime(datetime.date.today())
 
+            # Date Range Filtered Data (For Officers, Yes/No, Jama, Haddi)
             df_r2_filtered = df_raw[
                 (df_raw["mojni_date_parsed"] >= r2_start_dt)
                 & (df_raw["mojni_date_parsed"] <= r2_end_dt)
-            ].copy()
-
-            # Separate Filtered DataFrame for Shillak cases up to cut-off date
-            df_shillak_filtered = df_raw[
-                df_raw["mojni_date_parsed"] <= shillak_cutoff_dt
             ].copy()
 
             col_yn = "क्षेत्र अभिलेखाशी मेळात आहे का?"
@@ -275,9 +245,9 @@ if uploaded_file is not None:
 
             for tal in taluka_list:
                 df_t = df_r2_filtered[df_r2_filtered["तालुका"] == tal]
-                df_t_shillak = df_shillak_filtered[df_shillak_filtered["तालुका"] == tal]
+                df_taluka_all = df_raw[df_raw["तालुका"] == tal]
 
-                # Officer counts from Status
+                # Officer counts
                 chanani = len(
                     df_t[df_t["स्थिती"] == "छाननी लिपिक यांनी तपासले"]
                 )
@@ -301,7 +271,7 @@ if uploaded_file is not None:
                 else:
                     yes_no = 0
 
-                # 2. हददी दाखविणेवर Count (Mojni Type == 'ह्द्दकायम' AND Status == 'मोजणीची माहिती')
+                # 2. हददी दाखविणेवर Count
                 if col_mojni_type in df_t.columns:
                     haddi = len(
                         df_t[
@@ -312,7 +282,7 @@ if uploaded_file is not None:
                 else:
                     haddi = len(df_t[df_t["स्थिती"] == "मोजणीची माहिती"])
 
-                # 3. जमा करणेवर Count (ONLY Status == 'मोजणीची माहिती' AND Mojni Type != 'ह्द्दकायम')
+                # 3. जमा करणेवर Count
                 if col_mojni_type in df_t.columns:
                     jama = len(
                         df_t[
@@ -323,18 +293,12 @@ if uploaded_file is not None:
                 else:
                     jama = 0
 
-                # 4. शिल्लक प्रकरणे Count (Uses separate Cut-Off Date Filter)
-                all_active = df_t_shillak[~df_t_shillak["स्थिती"].isin(completed_defaults)]
+                # 4. 🔥 शिल्लक प्रकरणे (YOUR EXACT LOGIC)
+                # Column I (mojni_date_parsed) > Today Date AND Column K (स्थिती) == 'मोजणीची माहिती'
                 shillak = len(
-                    all_active[
-                        ~all_active["स्थिती"].isin(
-                            [
-                                "छाननी लिपिक यांनी तपासले",
-                                "शिरस्तेदार/मुख्यालय सहाय्यक यांनी तपासले",
-                                "ऊप.अ. भू. अ/ न .भू अ यांच्या मान्यतेवर",
-                                "मोजणीची माहिती",
-                            ]
-                        )
+                    df_taluka_all[
+                        (df_taluka_all["mojni_date_parsed"] > today_dt)
+                        & (df_taluka_all["स्थिती"] == "मोजणीची माहिती")
                     ]
                 )
 
@@ -377,7 +341,7 @@ if uploaded_file is not None:
 
             st.dataframe(df_rep2, use_container_width=True)
 
-            # PDF HTML Generation
+            # PDF Generation
             rows_html_r2 = ""
             for idx, row in df_rep2.iterrows():
                 is_tot = row["तालुका"] == "एकूण"
@@ -416,7 +380,7 @@ if uploaded_file is not None:
                 </style>
             </head>
             <body>
-                <div class="title">दिनांक {r2_from_str} ते {r2_to_str} (शिल्लक प्रकरणे कट-ऑफ: {shillak_date_str})</div>
+                <div class="title">दिनांक {r2_from_str} ते {r2_to_str}</div>
                 <table>
                     <thead>
                         <tr>
