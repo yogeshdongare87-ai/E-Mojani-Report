@@ -67,7 +67,7 @@ if uploaded_file is not None:
         "पासून (From)", value=min_excel_date, key="r1_start"
     )
     end_date = col_d2.date_input(
-        "पर्यंत (To)", value=datetime.date.today(), key="r1_end"
+        "पर्यंत (To)", value=max_excel_date, key="r1_end"
     )
 
     # --- 2. STATUS FILTER IN SIDEBAR ---
@@ -235,22 +235,13 @@ if uploaded_file is not None:
                 "पासून (From)", value=min_excel_date, key="r2_start"
             )
             r2_end_date = col_r2_d2.date_input(
-                "पर्यंत (To)", value=datetime.date.today(), key="r2_end"
+                "पर्यंत (To)", value=max_excel_date, key="r2_end"
             )
 
             r2_from_str = r2_start_date.strftime("%d/%m/%Y")
             r2_to_str = r2_end_date.strftime("%d/%m/%Y")
 
             st.info(f"🗓️ **Report 2 Period:** {r2_from_str} ते {r2_to_str}")
-
-            # Filter Excel Data by Report 2 selected dates
-            r2_start_dt = pd.to_datetime(r2_start_date)
-            r2_end_dt = pd.to_datetime(r2_end_date)
-
-            df_r2_filtered = df_raw[
-                (df_raw["mojni_date_parsed"] >= r2_start_dt)
-                & (df_raw["mojni_date_parsed"] <= r2_end_dt)
-            ].copy()
 
             col_yn = "क्षेत्र अभिलेखाशी मेळात आहे का?"
             col_mojni_type = "मोजणीचा प्रकार(Mojni Type)"
@@ -259,7 +250,8 @@ if uploaded_file is not None:
             report2_data = []
 
             for tal in taluka_list:
-                df_t = df_r2_filtered[df_r2_filtered["तालुका"] == tal]
+                # FULL UNFILTERED DATA FOR TALUKA (To match Excel exact numbers)
+                df_t = df_raw[df_raw["तालुका"] == tal]
 
                 # Officer counts from Status
                 chanani = len(
@@ -307,12 +299,11 @@ if uploaded_file is not None:
                 else:
                     jama = 0
 
-                # 4. FIX: शिल्लक प्रकरणे Count (Unfiltered Excel Data for full accuracy)
-                df_t_raw = df_raw[df_raw["तालुका"] == tal]
-                all_active_raw = df_t_raw[~df_t_raw["स्थिती"].isin(completed_defaults)]
+                # 4. शिल्लक प्रकरणे Count
+                all_active = df_t[~df_t["स्थिती"].isin(completed_defaults)]
                 shillak = len(
-                    all_active_raw[
-                        ~all_active_raw["स्थिती"].isin(
+                    all_active[
+                        ~all_active["स्थिती"].isin(
                             [
                                 "छाननी लिपिक यांनी तपासले",
                                 "शिरस्तेदार/मुख्यालय सहाय्यक यांनी तपासले",
