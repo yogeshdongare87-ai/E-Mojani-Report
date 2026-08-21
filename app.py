@@ -13,7 +13,6 @@ st.title("📊 भूमि अभिलेख विभाग - प्रलं
 # Sidebar - Filters
 st.sidebar.header("⚙️ Filter Options")
 
-# File Upload First
 uploaded_file = st.file_uploader(
     "Upload Raw E-Mojani Excel File (.xlsx)", type=["xlsx"]
 )
@@ -23,27 +22,23 @@ def parse_mojni_date(val):
     if pd.isna(val) or val == "" or str(val).strip() == "":
         return pd.NaT
     try:
-        # Excel Serial Number
         val_num = float(val)
         return datetime.datetime(1899, 12, 30) + datetime.timedelta(
             days=val_num
         )
     except:
-        # String / Standard Date Format
         return pd.to_datetime(val, errors="coerce")
 
 
 if uploaded_file is not None:
-    # Read Excel Data
     df_raw = pd.read_excel(uploaded_file)
     if "तालुका" not in df_raw.columns:
         df_raw = pd.read_excel(uploaded_file, header=1)
 
-    # Filter empty taluka rows
+    # Clean empty taluka
     if "तालुका" in df_raw.columns:
         df_raw = df_raw[df_raw["तालुका"].notna() & (df_raw["तालुका"] != "")]
 
-    # Exact Column Names Identification
     col_mojni_date = "मोजणी तारीख"  # Column I
     col_mojni_type = "मोजणीचा प्रकार(Mojni Type)"
     col_yn = "क्षेत्र अभिलेखाशी मेळात आहे का?"
@@ -53,7 +48,6 @@ if uploaded_file is not None:
         df_raw[col_mojni_date].apply(parse_mojni_date).dt.date
     )
 
-    # Calculate Min and Max dates from Column I
     valid_dates = df_raw["parsed_mojni_date"].dropna()
     min_excel_date = (
         valid_dates.min() if not valid_dates.empty else datetime.date(2023, 1, 1)
@@ -62,32 +56,20 @@ if uploaded_file is not None:
         valid_dates.max() if not valid_dates.empty else datetime.date.today()
     )
 
-    # --- SIDEBAR STATUS FILTER ---
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📌 स्थिती (Status) Filter")
-
-    all_statuses = df_raw["स्थिती"].dropna().unique().tolist()
+    # Global Completed Status List
     completed_defaults = [
         "क प्रत",
         "विनाकार्यवाही",
         "प्रस्तावित बिगरशेती/गुंठेवारी मोजणी पूर्ण",
     ]
-    default_selected = [s for s in all_statuses if s not in completed_defaults]
 
-    selected_statuses = st.sidebar.multiselect(
-        "Select Status for Report 1:",
-        options=all_statuses,
-        default=default_selected,
-    )
-
-    # --- DATA PROCESSING ---
     with st.spinner("Data process ho raha hai..."):
         tab1, tab2 = st.tabs(
             ["📊 Report 1 (तालुका व दिवसनिहाय)", "📋 Report 2 (टप्पा व अधिकारी निहाय)"]
         )
 
         # ---------------------------------------------------------------------
-        # REPORT 1: DAYWISE PENDING REPORT
+        # REPORT 1
         # ---------------------------------------------------------------------
         with tab1:
             st.sidebar.subheader("📅 Report 1 कालावधी")
@@ -99,12 +81,17 @@ if uploaded_file is not None:
                 "पर्यंत (To)", value=max_excel_date, key="r1_end"
             )
 
-            from_str1 = start_date_r1.strftime("%d/%m/%Y")
-            to_str1 = end_date_r1.strftime("%d/%m/%Y")
+            all_statuses = df_raw["स्थिती"].dropna().unique().tolist()
+            default_selected = [
+                s for s in all_statuses if s not in completed_defaults
+            ]
+            selected_statuses = st.sidebar.multiselect(
+                "Select Status:",
+                options=all_statuses,
+                default=default_selected,
+            )
 
             df1 = df_raw[df_raw["स्थिती"].isin(selected_statuses)].copy()
-
-            # Filter strictly on Column I (मोजणी तारीख)
             df1 = df1[
                 (df1["parsed_mojni_date"] >= start_date_r1)
                 & (df1["parsed_mojni_date"] <= end_date_r1)
@@ -140,7 +127,6 @@ if uploaded_file is not None:
             pivot_df = pd.crosstab(
                 df1["तालुका"], df1["दिवस वर"], margins=True, margins_name="एकूण"
             )
-
             existing_cols = [c for c in bucket_order if c in pivot_df.columns]
             if "तारीख उपलब्ध नाही" in pivot_df.columns:
                 existing_cols.append("तारीख उपलब्ध नाही")
@@ -148,21 +134,14 @@ if uploaded_file is not None:
                 existing_cols.append("एकूण")
 
             pivot_df = pivot_df[existing_cols]
-
-            st.success(f"✅ Total Filtered Cases: **{len(df1)}**")
-            st.info(f"📅 **Selected Period:** {from_str1} ते {to_str1}")
             st.dataframe(pivot_df, use_container_width=True)
 
         # ---------------------------------------------------------------------
-        # REPORT 2: STAGE & OFFICER-WISE SUMMARY REPORT
+        # REPORT 2
         # ---------------------------------------------------------------------
         with tab2:
             st.subheader("📋 Report 2 - टप्पा व अधिकारी निहाय अहवाल")
 
-            # Date Selector for Report 2
-            st.markdown(
-                "##### 📅 Report 2 कालावधी निवडा (मोजणी तारीख कॉलम I के अनुसार):"
-            )
             col_r2_d1, col_r2_d2 = st.columns(2)
             r2_start_date = col_r2_d1.date_input(
                 "पासून (From)", value=min_excel_date, key="r2_start"
@@ -174,82 +153,88 @@ if uploaded_file is not None:
             r2_from_str = r2_start_date.strftime("%d/%m/%Y")
             r2_to_str = r2_end_date.strftime("%d/%m/%Y")
 
-            st.info(
-                f"🗓️ **Report 2 Filtered Period (मोजणी तारीख):** {r2_from_str} ते {r2_to_str}"
-            )
-
             taluka_list = sorted(df_raw["तालुका"].dropna().unique().tolist())
             report2_data = []
 
             for tal in taluka_list:
-                # 1. Filter Data for Taluka within Selected Date Range of Column I (मोजणी तारीख)
-                df_t_filtered = df_raw[
-                    (df_raw["तालुका"] == tal)
-                    & (df_raw["parsed_mojni_date"] >= r2_start_date)
-                    & (df_raw["parsed_mojni_date"] <= r2_end_date)
+                # Full Data for Taluka (Unfiltered for Shillak Cases)
+                df_taluka_all = df_raw[df_raw["तालुका"] == tal]
+
+                # Filtered Data for Date Range
+                df_taluka_filtered = df_taluka_all[
+                    (df_taluka_all["parsed_mojni_date"] >= r2_start_date)
+                    & (df_taluka_all["parsed_mojni_date"] <= r2_end_date)
                 ]
 
-                # 2. Officer Counts (From Date Filtered Data)
+                # 1. Officers Count (From Date Filtered Data)
                 chanani = len(
-                    df_t_filtered[
-                        df_t_filtered["स्थिती"] == "छाननी लिपिक यांनी तपासले"
+                    df_taluka_filtered[
+                        df_taluka_filtered["स्थिती"] == "छाननी लिपिक यांनी तपासले"
                     ]
                 )
                 shirastedar = len(
-                    df_t_filtered[
-                        df_t_filtered["स्थिती"]
+                    df_taluka_filtered[
+                        df_taluka_filtered["स्थिती"]
                         == "शिरस्तेदार/मुख्यालय सहाय्यक यांनी तपासले"
                     ]
                 )
                 up_bhoo = len(
-                    df_t_filtered[
-                        df_t_filtered["स्थिती"]
+                    df_taluka_filtered[
+                        df_taluka_filtered["स्थिती"]
                         == "ऊप.अ. भू. अ/ न .भू अ यांच्या मान्यतेवर"
                     ]
                 )
                 off_total = chanani + shirastedar + up_bhoo
 
-                # 3. Yes/No Count (Col Q)
-                if col_yn in df_t_filtered.columns:
+                # 2. Yes/No Count (Col Q)
+                if col_yn in df_taluka_filtered.columns:
                     yes_no = len(
-                        df_t_filtered[
-                            df_t_filtered[col_yn].notna()
-                            & (df_t_filtered[col_yn] != "")
+                        df_taluka_filtered[
+                            df_taluka_filtered[col_yn].notna()
+                            & (df_taluka_filtered[col_yn] != "")
                         ]
                     )
                 else:
                     yes_no = 0
 
-                # 4. हददी दाखविणेवर Count (Mojni Type == 'ह्द्दकायम' AND Status == 'मोजणीची माहिती')
-                if col_mojni_type in df_t_filtered.columns:
+                # 3. हददी दाखविणेवर Count (Date Filtered)
+                if col_mojni_type in df_taluka_filtered.columns:
                     haddi = len(
-                        df_t_filtered[
-                            (df_t_filtered[col_mojni_type] == "ह्द्दकायम")
-                            & (df_t_filtered["स्थिती"] == "मोजणीची माहिती")
+                        df_taluka_filtered[
+                            (df_taluka_filtered[col_mojni_type] == "ह्द्दकायम")
+                            & (
+                                df_taluka_filtered["स्थिती"]
+                                == "मोजणीची माहिती"
+                            )
                         ]
                     )
                 else:
                     haddi = len(
-                        df_t_filtered[
-                            df_t_filtered["स्थिती"] == "मोजणीची माहिती"
+                        df_taluka_filtered[
+                            df_taluka_filtered["स्थिती"] == "मोजणीची माहिती"
                         ]
                     )
 
-                # 5. जमा करणेवर Count (Status == 'मोजणीची माहिती' AND Mojni Type != 'ह्द्दकायम')
-                if col_mojni_type in df_t_filtered.columns:
+                # 4. जमा करणेवर Count (Date Filtered)
+                if col_mojni_type in df_taluka_filtered.columns:
                     jama = len(
-                        df_t_filtered[
-                            (df_t_filtered["स्थिती"] == "मोजणीची माहिती")
-                            & (df_t_filtered[col_mojni_type] != "ह्द्दकायम")
+                        df_taluka_filtered[
+                            (
+                                df_taluka_filtered["स्थिती"]
+                                == "मोजणीची माहिती"
+                            )
+                            & (
+                                df_taluka_filtered[col_mojni_type]
+                                != "ह्द्दकायम"
+                            )
                         ]
                     )
                 else:
                     jama = 0
 
-                # 6. शिल्लक प्रकरणे Count
-                # Remaining active cases in the selected date range
-                all_active = df_t_filtered[
-                    ~df_t_filtered["स्थिती"].isin(completed_defaults)
+                # 5. शिल्लक प्रकरणे Count (TOTAL ACTIVE CASES IN EXCEL WITHOUT DATE FILTER)
+                all_active = df_taluka_all[
+                    ~df_taluka_all["स्थिती"].isin(completed_defaults)
                 ]
                 shillak = len(
                     all_active[
@@ -302,77 +287,3 @@ if uploaded_file is not None:
             )
 
             st.dataframe(df_rep2, use_container_width=True)
-
-            # PDF HTML Generation
-            rows_html_r2 = ""
-            for idx, row in df_rep2.iterrows():
-                is_tot = row["तालुका"] == "एकूण"
-                st_cls = (
-                    "background-color: #d3d3d3; font-weight: bold;"
-                    if is_tot
-                    else ""
-                )
-                rows_html_r2 += f"""
-                <tr style="{st_cls}">
-                    <td style="text-align:left;"><b>{row['तालुका']}</b></td>
-                    <td>{row['Yes/No']}</td>
-                    <td>{row['जमा करणेवर']}</td>
-                    <td>{row['हददी दाखविणेवर']}</td>
-                    <td>{row['शिल्लक प्रकरणे']}</td>
-                    <td style="background-color: #f0f0f0;"><b>{row['Grand Total']}</b></td>
-                    <td>{row['छाननी लिपीक']}</td>
-                    <td>{row['शिरस्तेदार/मुख्यालय सहाय्यक']}</td>
-                    <td>{row['उप अ भू अ/ भू अ']}</td>
-                    <td style="background-color: #f0f0f0;"><b>{row['Grand Total ']}</b></td>
-                </tr>
-                """
-
-            html_content_r2 = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <style>
-                    @page {{ size: A4 landscape; margin: 10mm; }}
-                    body {{ font-family: 'Gargi', 'DejaVu Sans', sans-serif; font-size: 11px; text-align: center; }}
-                    .title {{ font-size: 16px; font-weight: bold; margin-bottom: 15px; text-align: center; }}
-                    table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
-                    th {{ background-color: #bfbfbf; color: black; padding: 6px; border: 1px solid #000; font-size: 10px; text-align: center; }}
-                    td {{ padding: 5px; border: 1px solid #000; font-size: 10px; text-align: center; }}
-                    tr:nth-child(even) {{ background-color: #fdfdfd; }}
-                </style>
-            </head>
-            <body>
-                <div class="title">दिनांक {r2_from_str} ते {r2_to_str}</div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>तालुका</th>
-                            <th>Yes/No</th>
-                            <th>जमा करणेवर</th>
-                            <th>हददी दाखविणेवर</th>
-                            <th>शिल्लक प्रकरणे</th>
-                            <th>Grand Total</th>
-                            <th>छाननी लिपीक</th>
-                            <th>शिरस्तेदार/<br>मुख्यालय सहाय्यक</th>
-                            <th>उप अ भू अ/<br>भू अ</th>
-                            <th>Grand Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows_html_r2}
-                    </tbody>
-                </table>
-            </body>
-            </html>
-            """
-
-            pdf_bytes_r2 = HTML(string=html_content_r2).write_pdf()
-
-            st.download_button(
-                label="📥 Download Report 2 PDF",
-                data=pdf_bytes_r2,
-                file_name=(
-                    f"Report_2_{r2_from_str.replace('/', '-')}_to_{r2_to_str.replace('/', '-')}.pdf"
-                ),
-                mime="application/pdf",
-            )
