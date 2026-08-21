@@ -246,7 +246,6 @@ if uploaded_file is not None:
             # Filter Excel Data by Report 2 selected dates
             r2_start_dt = pd.to_datetime(r2_start_date)
             r2_end_dt = pd.to_datetime(r2_end_date)
-            today_dt = pd.to_datetime(datetime.date.today())
 
             df_r2_filtered = df_raw[
                 (df_raw["mojni_date_parsed"] >= r2_start_dt)
@@ -308,20 +307,19 @@ if uploaded_file is not None:
                 else:
                     jama = 0
 
-                # 4. UPDATED: शिल्लक प्रकरणे Count
-                # (केवल वही पेंडिंग केस जिनका Mojni Date <= Today है और Status 'मोजणीची माहिती' नहीं है)
-                all_active = df_t[~df_t["स्थिती"].isin(completed_defaults)]
+                # 4. FIX: शिल्लक प्रकरणे Count (Unfiltered Excel Data for full accuracy)
+                df_t_raw = df_raw[df_raw["तालुका"] == tal]
+                all_active_raw = df_t_raw[~df_t_raw["स्थिती"].isin(completed_defaults)]
                 shillak = len(
-                    all_active[
-                        (~all_active["स्थिती"].isin(
+                    all_active_raw[
+                        ~all_active_raw["स्थिती"].isin(
                             [
                                 "छाननी लिपिक यांनी तपासले",
                                 "शिरस्तेदार/मुख्यालय सहाय्यक यांनी तपासले",
                                 "ऊप.अ. भू. अ/ न .भू अ यांच्या मान्यतेवर",
                                 "मोजणीची माहिती",
                             ]
-                        ))
-                        & (all_active["mojni_date_parsed"] <= today_dt)
+                        )
                     ]
                 )
 
