@@ -1,30 +1,12 @@
 import datetime
 import pandas as pd
 import streamlit as st
-import plotly.express as px
 from weasyprint import HTML
 
 # Page Setup
 st.set_page_config(
-    page_title="E-Mojani Filtered Pending Report Generator & Dashboard",
-    layout="wide",
+    page_title="E-Mojani Filtered Pending Report Generator & Dashboard", layout="wide"
 )
-
-# Custom Styling (CSS)
-st.markdown("""
-    <style>
-    .metric-card {
-        background-color: #f8f9fa;
-        border-radius: 12px;
-        padding: 18px;
-        border-left: 6px solid #2b9348;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        text-align: center;
-    }
-    .metric-title { font-size: 14px; color: #555; font-weight: 600; }
-    .metric-value { font-size: 26px; color: #1b4332; font-weight: bold; margin-top: 5px; }
-    </style>
-""", unsafe_allow_html=True)
 
 st.title("📊 भूमि अभिलेख विभाग - प्रलंबित मोजणी अहवाल व डैशबोर्ड")
 
@@ -40,7 +22,9 @@ def parse_excel_date(val):
         return pd.NaT
     try:
         val_num = float(val)
-        return datetime.datetime(1899, 12, 30) + datetime.timedelta(days=val_num)
+        return datetime.datetime(1899, 12, 30) + datetime.timedelta(
+            days=val_num
+        )
     except:
         return pd.to_datetime(val, errors="coerce")
 
@@ -93,11 +77,12 @@ if uploaded_file is not None:
     )
 
     with st.spinner("Data process ho raha hai..."):
+        # 3 TABS: TAB 1, TAB 2, AND NEW DASHBOARD TAB 3
         tab1, tab2, tab3 = st.tabs(
             [
                 "📊 Report 1 (तालुका व दिवसनिहाय)", 
                 "📋 Report 2 (टप्पा व अधिकारी निहाय)",
-                "📈 Executive Dashboard (Charts & Insights)"
+                "📈 Executive Dashboard (Top Performance)"
             ]
         )
 
@@ -296,107 +281,86 @@ if uploaded_file is not None:
             st.dataframe(df_rep2, use_container_width=True)
 
         # ---------------------------------------------------------------------
-        # TAB 3: STYLISH DASHBOARD WITH CHARTS & COLORFUL CARDS (NEW)
+        # TAB 3: EXECUTIVE DASHBOARD & TOP PERFORMANCE (NEW)
         # ---------------------------------------------------------------------
         with tab3:
-            st.markdown("## 🎨 Executive Visual Dashboard")
+            st.subheader("📈 'क प्रत' कामगिरी व विश्लेषण डैशबोर्ड")
 
-            # Dates for Previous Month
+            # 1. Calculate Previous Month Dates Automatically
             today = datetime.date.today()
             first_day_of_curr_month = today.replace(day=1)
             last_day_prev_month = first_day_of_curr_month - datetime.timedelta(days=1)
             first_day_prev_month = last_day_prev_month.replace(day=1)
 
-            st.info(f"📅 **विश्लेषण कालावधी (मागील महिना):** {first_day_prev_month.strftime('%d/%m/%Y')} ते {last_day_prev_month.strftime('%d/%m/%Y')}")
+            st.markdown(
+                f"##### 🗓️ **पिछले महीने का विश्लेषण:** ({first_day_prev_month.strftime('%d/%m/%Y')} ते {last_day_prev_month.strftime('%d/%m/%Y')})"
+            )
 
+            # Filter data for previous month & 'क प्रत' Status
             p_start_dt = pd.to_datetime(first_day_prev_month)
             p_end_dt = pd.to_datetime(last_day_prev_month)
 
-            df_prev_kprat = df_raw[
+            df_prev_month_kprat = df_raw[
                 (df_raw["mojni_date_parsed"] >= p_start_dt)
                 & (df_raw["mojni_date_parsed"] <= p_end_dt)
                 & (df_raw["स्थिती"] == "क प्रत")
             ].copy()
 
-            # --- COLORFUL KPI CARDS ---
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.markdown(f"""
-                    <div class="metric-card" style="border-left-color: #2a9d8f;">
-                        <div class="metric-title">🏆 मागील महिन्यात 'क प्रत' निकाल</div>
-                        <div class="metric-value">{len(df_prev_kprat)}</div>
-                    </div>
-                """, unsafe_allow_html=True)
-            with c2:
-                st.markdown(f"""
-                    <div class="metric-card" style="border-left-color: #e76f51;">
-                        <div class="metric-title">⏳ एकूण प्रलंबित प्रकरणे</div>
-                        <div class="metric-value">{len(df_raw[~df_raw["स्थिती"].isin(completed_defaults)])}</div>
-                    </div>
-                """, unsafe_allow_html=True)
-            with c3:
-                st.markdown(f"""
-                    <div class="metric-card" style="border-left-color: #f4a261;">
-                        <div class="metric-title">📌 आजच्या तारखेनंतरची शिल्लक प्रकरणे</div>
-                        <div class="metric-value">{len(df_raw[(df_raw["mojni_date_parsed"] > today_dt) & (df_raw["स्थिती"] == "मोजणीची माहिती")])}</div>
-                    </div>
-                """, unsafe_allow_html=True)
+            col_dash1, col_dash2 = st.columns(2)
 
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # --- CHARTS SECTION ---
-            col_chart1, col_chart2 = st.columns(2)
-
-            with col_chart1:
-                st.markdown("### 🥇 Top 3 तालुका ('क प्रत')")
-                if not df_prev_kprat.empty:
-                    top_t = df_prev_kprat["तालुका"].value_counts().head(3).reset_index()
-                    top_t.columns = ["तालुका", "संख्या"]
-
-                    # Plotly Colorful Bar Chart
-                    fig_taluka = px.bar(
-                        top_t,
-                        x="तालुका",
-                        y="संख्या",
-                        text="संख्या",
-                        color="तालुका",
-                        color_discrete_sequence=px.colors.qualitative.Set2,
-                        title="Top 3 तालुका - 'क प्रत' कामगिरी"
+            with col_dash1:
+                st.markdown("### 🏆 Top 3 तालुका ('क प्रत' निकाली)")
+                if not df_prev_month_kprat.empty:
+                    top_talukas = (
+                        df_prev_month_kprat["तालुका"]
+                        .value_counts()
+                        .head(3)
+                        .reset_index()
                     )
-                    fig_taluka.update_traces(textposition="outside")
-                    fig_taluka.update_layout(showlegend=False, height=350)
-                    st.plotly_chart(fig_taluka, use_container_width=True)
+                    top_talukas.columns = ["तालुका", "क प्रत निकाली संख्या"]
+                    st.dataframe(top_talukas, use_container_width=True, hide_index=True)
                 else:
-                    st.warning("मागील महिन्यात 'क प्रत' चा डेटा उपलब्ध नाही.")
+                    st.warning("पिछले महीने में 'क प्रत' का कोई डेटा उपलब्ध नहीं है।")
 
-            with col_chart2:
-                st.markdown("### 👷 Top सर्वेक्षक / मोजणीदार")
+            with col_dash2:
+                st.markdown("### 👷 Top सर्वेक्षक / अधिकारी ('क प्रत' निकाली)")
                 
+                # Check potential Surveyor/Employee column names in Excel
                 surveyor_col = None
-                for c in ["कर्मचारी/अधिकारी चे नाव", "मोजणीदार", "कर्मचारी नाव", "अधिकारी नाव"]:
+                possible_cols = ["कर्मचारी/अधिकारी चे नाव", "मोजणीदार", "कर्मचारी नाव", "अधिकारी नाव"]
+                for c in possible_cols:
                     if c in df_raw.columns:
                         surveyor_col = c
                         break
 
-                if surveyor_col and not df_prev_kprat.empty:
-                    top_s = df_prev_kprat[surveyor_col].value_counts().head(5).reset_index()
-                    top_s.columns = ["नाव", "संख्या"]
-
-                    # Plotly Horizontal Bar Chart
-                    fig_surv = px.bar(
-                        top_s,
-                        x="संख्या",
-                        y="नाव",
-                        orientation="h",
-                        text="संख्या",
-                        color="नाव",
-                        color_discrete_sequence=px.colors.qualitative.Pastel,
-                        title="सर्वोत्तम कामगिरी करणारे मोजणीदार"
+                if surveyor_col and not df_prev_month_kprat.empty:
+                    top_surveyors = (
+                        df_prev_month_kprat[surveyor_col]
+                        .value_counts()
+                        .head(5)
+                        .reset_index()
                     )
-                    fig_surv.update_traces(textposition="outside")
-                    fig_surv.update_layout(showlegend=False, height=350, yaxis=dict(autorange="reversed"))
-                    st.plotly_chart(fig_surv, use_container_width=True)
+                    top_surveyors.columns = ["सर्वेक्षक / कर्मचारी नाव", "क प्रत निकाली संख्या"]
+                    st.dataframe(top_surveyors, use_container_width=True, hide_index=True)
                 elif not surveyor_col:
-                    st.info("💡 Excel मध्ये 'कर्मचारी/अधिकारी चे नाव' कॉलम मिळाला नाही.")
+                    st.info("💡 Excel में सर्वेक्षक के नाम वाला कॉलम दर्ज नहीं मिला। (जैसे: 'कर्मचारी/अधिकारी चे नाव')")
                 else:
-                    st.warning("मागील महिन्यात 'क प्रत' चा डेटा उपलब्ध नाही.")
+                    st.warning("पिछले महीने में 'क प्रत' का कोई डेटा उपलब्ध नहीं है।")
+
+            st.markdown("---")
+            
+            # Quick Performance Summary Bar
+            st.markdown("### 📊 त्वरित सारांश (Quick Metrics)")
+            m1, m2, m3 = st.columns(3)
+            m1.metric(
+                label="कुल 'क प्रत' (पिछले महीने)", 
+                value=len(df_prev_month_kprat)
+            )
+            m2.metric(
+                label="कुल प्रलंबित केस (Overall Pending)", 
+                value=len(df_raw[~df_raw["स्थिती"].isin(completed_defaults)])
+            )
+            m3.metric(
+                label="आज की तिथि तक शिल्लक प्रकरणे", 
+                value=len(df_raw[(df_raw["mojni_date_parsed"] > today_dt) & (df_raw["स्थिती"] == "मोजणीची माहिती")])
+            )
