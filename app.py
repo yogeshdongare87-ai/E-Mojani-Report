@@ -344,8 +344,80 @@ if uploaded_file is not None:
             )
             st.dataframe(df_rep2, use_container_width=True)
 
+            # --- REPORT 2 PDF DOWNLOAD BUTTON (ADDED HERE) ---
+            rows_html_r2 = ""
+            for idx, row in df_rep2.iterrows():
+                is_tot = row["तालुका"] == "एकूण"
+                st_cls = (
+                    "background-color: #d3d3d3; font-weight: bold;"
+                    if is_tot
+                    else ""
+                )
+                rows_html_r2 += f"""
+                <tr style="{st_cls}">
+                    <td style="text-align:left;"><b>{row['तालुका']}</b></td>
+                    <td>{row['Yes/No']}</td>
+                    <td>{row['जमा करणेवर']}</td>
+                    <td>{row['हददी दाखविणेवर']}</td>
+                    <td>{row['शिल्लक प्रकरणे']}</td>
+                    <td style="background-color: #f0f0f0;"><b>{row['Grand Total']}</b></td>
+                    <td>{row['छाननी लिपीक']}</td>
+                    <td>{row['शिरस्तेदार/मुख्यालय सहाय्यक']}</td>
+                    <td>{row['उप अ भू अ/ भू अ']}</td>
+                    <td style="background-color: #f0f0f0;"><b>{row['Grand Total ']}</b></td>
+                </tr>
+                """
+
+            html_content_r2 = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    @page {{ size: A4 landscape; margin: 10mm; }}
+                    body {{ font-family: 'Gargi', 'DejaVu Sans', sans-serif; font-size: 11px; text-align: center; }}
+                    .title {{ font-size: 16px; font-weight: bold; margin-bottom: 15px; text-align: center; }}
+                    table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
+                    th {{ background-color: #bfbfbf; color: black; padding: 6px; border: 1px solid #000; font-size: 10px; text-align: center; }}
+                    td {{ padding: 5px; border: 1px solid #000; font-size: 10px; text-align: center; }}
+                    tr:nth-child(even) {{ background-color: #fdfdfd; }}
+                </style>
+            </head>
+            <body>
+                <div class="title">टप्पा व अधिकारी निहाय अहवाल (दिनांक {r2_from_str} ते {r2_to_str})</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>तालुका</th>
+                            <th>Yes/No</th>
+                            <th>जमा करणेवर</th>
+                            <th>हददी दाखविणेवर</th>
+                            <th>शिल्लक प्रकरणे</th>
+                            <th>Grand Total</th>
+                            <th>छाननी लिपीक</th>
+                            <th>शिरस्तेदार/<br>मुख्यालय सहाय्यक</th>
+                            <th>उप अ भू अ/<br>भू अ</th>
+                            <th>Grand Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows_html_r2}
+                    </tbody>
+                </table>
+            </body>
+            </html>
+            """
+
+            pdf_bytes_r2 = HTML(string=html_content_r2).write_pdf()
+
+            st.download_button(
+                label="📥 Download PDF Report 2",
+                data=pdf_bytes_r2,
+                file_name=f"Mojani_Report2_{r2_from_str.replace('/', '-')}_to_{r2_to_str.replace('/', '-')}.pdf",
+                mime="application/pdf",
+            )
+
         # ---------------------------------------------------------------------
-        # TAB 3: VISUAL DASHBOARD (COLUMN J = भूकरमापक)
+        # TAB 3: VISUAL DASHBOARD
         # ---------------------------------------------------------------------
         with tab3:
             st.markdown("## 🎨 Executive Visual Dashboard")
@@ -441,7 +513,6 @@ if uploaded_file is not None:
             with col_chart2:
                 st.markdown("### 👷 Top भूकरमापक ('क प्रत')")
 
-                # Column J Target Column Check
                 surveyor_col = None
                 for col_name in ["भूकरमापक", "कर्मचारी/अधिकारी चे नाव"]:
                     if col_name in df_raw.columns:
@@ -449,7 +520,6 @@ if uploaded_file is not None:
                         break
 
                 if surveyor_col and not df_prev_kprat.empty:
-                    # Clean empty/null values in Column J
                     df_surveyor_filtered = df_prev_kprat[
                         df_prev_kprat[surveyor_col].notna()
                         & (df_prev_kprat[surveyor_col].astype(str).str.strip() != "")
