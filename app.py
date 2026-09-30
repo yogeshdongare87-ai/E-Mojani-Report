@@ -603,7 +603,7 @@ if uploaded_file is not None:
                 # Status Filter
                 df_r3_pending = df_r3_clean[df_r3_clean["स्थिती"].isin(selected_statuses)].copy()
 
-                # KEY FIX: Column I (मोजणी तारीख) से केवल आज की तारीख या उससे पुरानी तारीखों को ही शामिल करें
+                # Column I (मोजणी तारीख) - Only today or older dates included
                 curr_today = pd.to_datetime(datetime.date.today())
                 df_r3_pending = df_r3_pending[
                     df_r3_pending["mojni_date_parsed"].notna()
@@ -665,16 +665,92 @@ if uploaded_file is not None:
                     st.markdown(f"### **मोजणी प्रकरणाबाबत आढावा दिनांक: {curr_date_fmt}**")
                     st.dataframe(pivot_r3, use_container_width=True, height=600)
 
-                    @st.cache_data
-                    def convert_r3_to_csv(data_frame):
-                        return data_frame.to_csv().encode("utf-8-sig")
+                    # --- COLORED EXCEL GENERATION FUNCTION ---
+                    import io
+                    import openpyxl
+                    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
-                    r3_csv = convert_r3_to_csv(pivot_r3)
+                    def generate_colored_excel(df_pivot):
+                        output = io.BytesIO()
+                        wb = openpyxl.Workbook()
+                        ws = wb.active
+                        ws.title = "Report 3"
+
+                        # Title Header
+                        ws.merge_cells("A1:I1")
+                        title_cell = ws["A1"]
+                        title_cell.value = f"भूकरमापक निहाय व दिवसनिहाय प्रलंबित मोजणी प्रकरणे (आढावा दिनांक: {curr_date_fmt})"
+                        title_cell.font = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
+                        title_cell.fill = PatternFill(start_color="1B4332", end_color="1B4332", fill_type="solid")
+                        title_cell.alignment = Alignment(horizontal="center", vertical="center")
+                        ws.row_dimensions[1].height = 30
+
+                        # Styles & Colors
+                        header_fill = PatternFill(start_color="2B9348", end_color="2B9348", fill_type="solid")
+                        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+                        
+                        total_row_fill = PatternFill(start_color="D9F0A3", end_color="D9F0A3", fill_type="solid")
+                        total_font = Font(name="Calibri", size=11, bold=True, color="000000")
+                        
+                        thin_border = Border(
+                            left=Side(style='thin', color='CCCCCC'),
+                            right=Side(style='thin', color='CCCCCC'),
+                            top=Side(style='thin', color='CCCCCC'),
+                            bottom=Side(style='thin', color='CCCCCC')
+                        )
+
+                        # Write Column Headers
+                        headers = ["तालुका", "भूकरमापक"] + list(df_pivot.columns)
+                        ws.append([]) # Row 2 empty spacing
+                        ws.append(headers) # Row 3 Headers
+
+                        ws.row_dimensions[3].height = 25
+                        for col_idx in range(1, len(headers) + 1):
+                            cell = ws.cell(row=3, column=col_idx)
+                            cell.fill = header_fill
+                            cell.font = header_font
+                            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+                        # Write Data
+                        for idx, (index_vals, row_data) in enumerate(df_pivot.iterrows()):
+                            taluka_val, surveyor_val = index_vals if isinstance(index_vals, tuple) else (index_vals, "")
+                            row_vals = [taluka_val, surveyor_val] + list(row_data.values)
+                            ws.append(row_vals)
+                            
+                            current_row_idx = ws.max_row
+                            is_grand_total = (taluka_val == "Grand Total")
+
+                            for col_idx in range(1, len(row_vals) + 1):
+                                cell = ws.cell(row=current_row_idx, column=col_idx)
+                                cell.border = thin_border
+                                
+                                if is_grand_total:
+                                    cell.fill = total_row_fill
+                                    cell.font = total_font
+                                else:
+                                    cell.font = Font(name="Calibri", size=10)
+                                
+                                if col_idx > 2:
+                                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                                else:
+                                    cell.alignment = Alignment(horizontal="left", vertical="center")
+
+                        # Auto-fit Column Widths
+                        for col in ws.columns:
+                            max_len = max(len(str(cell.value or '')) for cell in col)
+                            col_letter = openpyxl.utils.get_column_letter(col[0].column)
+                            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+                        wb.save(output)
+                        return output.getvalue()
+
+                    excel_bytes = generate_colored_excel(pivot_r3)
+
                     st.download_button(
-                        label="📥 Download Report 3 (Excel / CSV)",
-                        data=r3_csv,
-                        file_name=f"Report_3_Bhukarmapak_Pending_{curr_date_fmt}.csv",
-                        mime="text/csv",
+                        label="🎨 Download Colored Excel Report 3 (.xlsx)",
+                        data=excel_bytes,
+                        file_name=f"Report_3_Bhukarmapak_Pending_{curr_date_fmt}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
 else:
     st.info("👈 कृपया डाव्या बाजूच्या Sidebar मधून E-Mojani ची Excel (.xlsx) फाईल Upload करा.")
