@@ -2,7 +2,13 @@ import datetime
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from weasyprint import HTML
+
+# WeasyPrint check for PDF generation
+try:
+    from weasyprint import HTML
+    WEASYPRINT_AVAILABLE = True
+except Exception:
+    WEASYPRINT_AVAILABLE = False
 
 # Page Setup
 st.set_page_config(
@@ -40,14 +46,14 @@ uploaded_file = st.sidebar.file_uploader(
 
 
 def parse_excel_date(val):
-    if pd.isna(val):
+    if pd.isna(val) or val == "":
         return pd.NaT
     try:
         val_num = float(val)
         return datetime.datetime(1899, 12, 30) + datetime.timedelta(
             days=val_num
         )
-    except:
+    except Exception:
         return pd.to_datetime(val, errors="coerce")
 
 
@@ -57,7 +63,7 @@ if uploaded_file is not None:
         df_raw = pd.read_excel(uploaded_file, header=1)
 
     if "तालुका" in df_raw.columns:
-        df_raw = df_raw[df_raw["तालुका"].notna() & (df_raw["तालुका"] != "")]
+        df_raw = df_raw[df_raw["तालुका"].notna() & (df_raw["तालुका"].astype(str).str.strip() != "")]
 
     df_raw["mojni_date_parsed"] = df_raw["मोजणी तारीख"].apply(parse_excel_date)
 
@@ -173,56 +179,62 @@ if uploaded_file is not None:
             st.dataframe(pivot_df, use_container_width=True)
 
             # PDF Generation for Report 1
-            rows_html = ""
-            for taluka, row in pivot_df.iterrows():
-                is_total = taluka == "एकूण"
-                tr_style = (
-                    "background-color: #d9f0a3; font-weight: bold;"
-                    if is_total
-                    else ""
+            if WEASYPRINT_AVAILABLE:
+                rows_html = ""
+                for taluka, row in pivot_df.iterrows():
+                    is_total = taluka == "एकूण"
+                    tr_style = (
+                        "background-color: #d9f0a3; font-weight: bold;"
+                        if is_total
+                        else ""
+                    )
+                    tds = f"<td><b>{taluka}</b></td>"
+                    for col in existing_cols:
+                        tds += f"<td style='text-align: center;'>{row[col]}</td>"
+                    rows_html += f"<tr style='{tr_style}'>{tds}</tr>"
+
+                headers_html = "<th>तालुका</th>" + "".join(
+                    [f"<th>{c}</th>" for c in existing_cols]
                 )
-                tds = f"<td><b>{taluka}</b></td>"
-                for col in existing_cols:
-                    tds += f"<td style='text-align: center;'>{row[col]}</td>"
-                rows_html += f"<tr style='{tr_style}'>{tds}</tr>"
 
-            headers_html = "<th>तालुका</th>" + "".join(
-                [f"<th>{c}</th>" for c in existing_cols]
-            )
+                html_content = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <style>
+                        @page {{ size: A4 portrait; margin: 15mm; }}
+                        body {{ font-family: 'Gargi', 'DejaVu Sans', sans-serif; font-size: 11px; }}
+                        h2 {{ text-align: center; margin-bottom: 5px; color: #1b4332; }}
+                        .date-header {{ text-align: center; font-size: 13px; font-weight: bold; margin-bottom: 15px; }}
+                        table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                        th {{ background-color: #2b9348; color: white; padding: 6px; border: 1px solid #555; font-size: 10px; }}
+                        td {{ padding: 5px; border: 1px solid #888; font-size: 10px; }}
+                        tr:nth-child(even) {{ background-color: #f9f9f9; }}
+                    </style>
+                </head>
+                <body>
+                    <h2>भूमि अभिलेख विभाग - अमरावती</h2>
+                    <div class="date-header">तालुका व दिवसनिहाय प्रलंबित मोजणी प्रकरणे अहवाल (दिनांक {from_str} ते {to_str})</div>
+                    <table>
+                        <thead><tr>{headers_html}</tr></thead>
+                        <tbody>{rows_html}</tbody>
+                    </table>
+                </body>
+                </html>
+                """
+                try:
+                    pdf_bytes = HTML(string=html_content).write_pdf()
 
-            html_content = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <style>
-                    @page {{ size: A4 portrait; margin: 15mm; }}
-                    body {{ font-family: 'Gargi', 'DejaVu Sans', sans-serif; font-size: 11px; }}
-                    h2 {{ text-align: center; margin-bottom: 5px; color: #1b4332; }}
-                    .date-header {{ text-align: center; font-size: 13px; font-weight: bold; margin-bottom: 15px; }}
-                    table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-                    th {{ background-color: #2b9348; color: white; padding: 6px; border: 1px solid #555; font-size: 10px; }}
-                    td {{ padding: 5px; border: 1px solid #888; font-size: 10px; }}
-                    tr:nth-child(even) {{ background-color: #f9f9f9; }}
-                </style>
-            </head>
-            <body>
-                <h2>भूमि अभिलेख विभाग - अमरावती</h2>
-                <div class="date-header">तालुका व दिवसनिहाय प्रलंबित मोजणी प्रकरणे अहवाल (दिनांक {from_str} ते {to_str})</div>
-                <table>
-                    <thead><tr>{headers_html}</tr></thead>
-                    <tbody>{rows_html}</tbody>
-                </table>
-            </body>
-            </html>
-            """
-            pdf_bytes = HTML(string=html_content).write_pdf()
-
-            st.download_button(
-                label="📥 Download PDF Report 1",
-                data=pdf_bytes,
-                file_name=f"Mojani_Pending_Report1_{from_str.replace('/', '-')}_to_{to_str.replace('/', '-')}.pdf",
-                mime="application/pdf",
-            )
+                    st.download_button(
+                        label="📥 Download PDF Report 1",
+                        data=pdf_bytes,
+                        file_name=f"Mojani_Pending_Report1_{from_str.replace('/', '-')}_to_{to_str.replace('/', '-')}.pdf",
+                        mime="application/pdf",
+                    )
+                except Exception as e:
+                    st.error(f"PDF जनरेट करताना त्रुटी आली: {e}")
+            else:
+                st.warning("⚠️ PDF जनरेशन उपलब्ध नाही (WeasyPrint लायब्ररी इंस्टाल नाही).")
 
         # ---------------------------------------------------------------------
         # TAB 2: REPORT 2 (टप्पा व अधिकारी निहाय)
@@ -241,7 +253,7 @@ if uploaded_file is not None:
             r2_from_str = r2_start_date.strftime("%d/%m/%Y")
             r2_to_str = r2_end_date.strftime("%d/%m/%Y")
 
-            st.info(f"🗓️ **Report 2 Period:** {r2_from_str} ते {r2_to_str}")
+            st.info(f"🗓️️ **Report 2 Period:** {r2_from_str} ते {r2_to_str}")
 
             r2_start_dt = pd.to_datetime(r2_start_date)
             r2_end_dt = pd.to_datetime(r2_end_date)
@@ -280,7 +292,7 @@ if uploaded_file is not None:
                 off_total = chanani + shirastedar + up_bhoo
 
                 yes_no = (
-                    len(df_t[df_t[col_yn].notna() & (df_t[col_yn] != "")])
+                    len(df_t[df_t[col_yn].notna() & (df_t[col_yn].astype(str).str.strip() != "")])
                     if col_yn in df_t.columns
                     else 0
                 )
@@ -347,76 +359,81 @@ if uploaded_file is not None:
             st.dataframe(df_rep2, use_container_width=True)
 
             # PDF Generation for Report 2
-            rows_html_r2 = ""
-            for idx, row in df_rep2.iterrows():
-                is_tot = row["तालुका"] == "एकूण"
-                st_cls = (
-                    "background-color: #d3d3d3; font-weight: bold;"
-                    if is_tot
-                    else ""
-                )
-                rows_html_r2 += f"""
-                <tr style="{st_cls}">
-                    <td style="text-align:left;"><b>{row['तालुका']}</b></td>
-                    <td>{row['Yes/No']}</td>
-                    <td>{row['जमा करणेवर']}</td>
-                    <td>{row['हददी दाखविणेवर']}</td>
-                    <td>{row['शिल्लक प्रकरणे']}</td>
-                    <td style="background-color: #f0f0f0;"><b>{row['Grand Total']}</b></td>
-                    <td>{row['छाननी लिपीक']}</td>
-                    <td>{row['शिरस्तेदार/मुख्यालय सहाय्यक']}</td>
-                    <td>{row['उप अ भू अ/ भू अ']}</td>
-                    <td style="background-color: #f0f0f0;"><b>{row['Grand Total ']}</b></td>
-                </tr>
+            if WEASYPRINT_AVAILABLE:
+                rows_html_r2 = ""
+                for idx, row in df_rep2.iterrows():
+                    is_tot = row["तालुका"] == "एकूण"
+                    st_cls = (
+                        "background-color: #d3d3d3; font-weight: bold;"
+                        if is_tot
+                        else ""
+                    )
+                    rows_html_r2 += f"""
+                    <tr style="{st_cls}">
+                        <td style="text-align:left;"><b>{row['तालुका']}</b></td>
+                        <td>{row['Yes/No']}</td>
+                        <td>{row['जमा करणेवर']}</td>
+                        <td>{row['हददी दाखविणेवर']}</td>
+                        <td>{row['शिल्लक प्रकरणे']}</td>
+                        <td style="background-color: #f0f0f0;"><b>{row['Grand Total']}</b></td>
+                        <td>{row['छाननी लिपीक']}</td>
+                        <td>{row['शिरस्तेदार/मुख्यालय सहाय्यक']}</td>
+                        <td>{row['उप अ भू अ/ भू अ']}</td>
+                        <td style="background-color: #f0f0f0;"><b>{row['Grand Total ']}</b></td>
+                    </tr>
+                    """
+
+                html_content_r2 = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <style>
+                        @page {{ size: A4 landscape; margin: 10mm; }}
+                        body {{ font-family: 'Gargi', 'DejaVu Sans', sans-serif; font-size: 11px; text-align: center; }}
+                        .title {{ font-size: 16px; font-weight: bold; margin-bottom: 15px; text-align: center; }}
+                        table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
+                        th {{ background-color: #bfbfbf; color: black; padding: 6px; border: 1px solid #000; font-size: 10px; text-align: center; }}
+                        td {{ padding: 5px; border: 1px solid #000; font-size: 10px; text-align: center; }}
+                        tr:nth-child(even) {{ background-color: #fdfdfd; }}
+                    </style>
+                </head>
+                <body>
+                    <div class="title">टप्पा व अधिकारी निहाय अहवाल (दिनांक {r2_from_str} ते {r2_to_str})</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>तालुका</th>
+                                <th>Yes/No</th>
+                                <th>जमा करणेवर</th>
+                                <th>हददी दाखविणेवर</th>
+                                <th>शिल्लक प्रकरणे</th>
+                                <th>Grand Total</th>
+                                <th>छाननी लिपीक</th>
+                                <th>शिरस्तेदार/<br>मुख्यालय सहाय्यक</th>
+                                <th>उप अ भू अ/<br>भू अ</th>
+                                <th>Grand Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows_html_r2}
+                        </tbody>
+                    </table>
+                </body>
+                </html>
                 """
+                try:
+                    pdf_bytes_r2 = HTML(string=html_content_r2).write_pdf()
 
-            html_content_r2 = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <style>
-                    @page {{ size: A4 landscape; margin: 10mm; }}
-                    body {{ font-family: 'Gargi', 'DejaVu Sans', sans-serif; font-size: 11px; text-align: center; }}
-                    .title {{ font-size: 16px; font-weight: bold; margin-bottom: 15px; text-align: center; }}
-                    table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
-                    th {{ background-color: #bfbfbf; color: black; padding: 6px; border: 1px solid #000; font-size: 10px; text-align: center; }}
-                    td {{ padding: 5px; border: 1px solid #000; font-size: 10px; text-align: center; }}
-                    tr:nth-child(even) {{ background-color: #fdfdfd; }}
-                </style>
-            </head>
-            <body>
-                <div class="title">टप्पा व अधिकारी निहाय अहवाल (दिनांक {r2_from_str} ते {r2_to_str})</div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>तालुका</th>
-                            <th>Yes/No</th>
-                            <th>जमा करणेवर</th>
-                            <th>हददी दाखविणेवर</th>
-                            <th>शिल्लक प्रकरणे</th>
-                            <th>Grand Total</th>
-                            <th>छाननी लिपीक</th>
-                            <th>शिरस्तेदार/<br>मुख्यालय सहाय्यक</th>
-                            <th>उप अ भू अ/<br>भू अ</th>
-                            <th>Grand Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows_html_r2}
-                    </tbody>
-                </table>
-            </body>
-            </html>
-            """
-
-            pdf_bytes_r2 = HTML(string=html_content_r2).write_pdf()
-
-            st.download_button(
-                label="📥 Download PDF Report 2",
-                data=pdf_bytes_r2,
-                file_name=f"Mojani_Report2_{r2_from_str.replace('/', '-')}_to_{r2_to_str.replace('/', '-')}.pdf",
-                mime="application/pdf",
-            )
+                    st.download_button(
+                        label="📥 Download PDF Report 2",
+                        data=pdf_bytes_r2,
+                        file_name=f"Mojani_Report2_{r2_from_str.replace('/', '-')}_to_{r2_to_str.replace('/', '-')}.pdf",
+                        mime="application/pdf",
+                    )
+                except Exception as e:
+                    st.error(f"PDF जनरेट करताना त्रुटी आली: {e}")
+            else:
+                st.warning("⚠️ PDF जनरेशन उपलब्ध नाही (WeasyPrint लायब्ररी इंस्टाल नाही).")
 
         # ---------------------------------------------------------------------
         # TAB 3: EXECUTIVE DASHBOARD
@@ -557,7 +574,7 @@ if uploaded_file is not None:
                         )
                 elif not surveyor_col:
                     st.info(
-                        "💡 Excel मध्ये Column J ('भूकरमापक') चा कॉलम आढळला नाही."
+                        "💡 Excel मध्ये 'भूकरमापक' चा कॉलम आढळला नाही."
                     )
                 else:
                     st.warning("मागील महिन्यात 'क प्रत' चा डेटा उपलब्ध नाही.")
