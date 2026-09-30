@@ -50,9 +50,7 @@ def parse_excel_date(val):
         return pd.NaT
     try:
         val_num = float(val)
-        return datetime.datetime(1899, 12, 30) + datetime.timedelta(
-            days=val_num
-        )
+        return datetime.datetime(1899, 12, 30) + datetime.timedelta(days=val_num)
     except Exception:
         return pd.to_datetime(val, errors="coerce")
 
@@ -63,7 +61,10 @@ if uploaded_file is not None:
         df_raw = pd.read_excel(uploaded_file, header=1)
 
     if "तालुका" in df_raw.columns:
-        df_raw = df_raw[df_raw["तालुका"].notna() & (df_raw["तालुका"].astype(str).str.strip() != "")]
+        df_raw = df_raw[
+            df_raw["तालुका"].notna()
+            & (df_raw["तालुका"].astype(str).str.strip() != "")
+        ]
 
     df_raw["mojni_date_parsed"] = df_raw["मोजणी तारीख"].apply(parse_excel_date)
 
@@ -253,7 +254,7 @@ if uploaded_file is not None:
             r2_from_str = r2_start_date.strftime("%d/%m/%Y")
             r2_to_str = r2_end_date.strftime("%d/%m/%Y")
 
-            st.info(f"🗓️️ **Report 2 Period:** {r2_from_str} ते {r2_to_str}")
+            st.info(f"🗓 **Report 2 Period:** {r2_from_str} ते {r2_to_str}")
 
             r2_start_dt = pd.to_datetime(r2_start_date)
             r2_end_dt = pd.to_datetime(r2_end_date)
@@ -292,7 +293,12 @@ if uploaded_file is not None:
                 off_total = chanani + shirastedar + up_bhoo
 
                 yes_no = (
-                    len(df_t[df_t[col_yn].notna() & (df_t[col_yn].astype(str).str.strip() != "")])
+                    len(
+                        df_t[
+                            df_t[col_yn].notna()
+                            & (df_t[col_yn].astype(str).str.strip() != "")
+                        ]
+                    )
                     if col_yn in df_t.columns
                     else 0
                 )
@@ -443,9 +449,7 @@ if uploaded_file is not None:
 
             today = datetime.date.today()
             first_day_of_curr_month = today.replace(day=1)
-            last_day_prev_month = first_day_of_curr_month - datetime.timedelta(
-                days=1
-            )
+            last_day_prev_month = first_day_of_curr_month - datetime.timedelta(days=1)
             first_day_prev_month = last_day_prev_month.replace(day=1)
 
             st.info(
@@ -573,9 +577,7 @@ if uploaded_file is not None:
                             "'क प्रत' केसेसमध्ये भूकरमापकांची नावे उपलब्ध नाहीत."
                         )
                 elif not surveyor_col:
-                    st.info(
-                        "💡 Excel मध्ये 'भूकरमापक' चा कॉलम आढळला नाही."
-                    )
+                    st.info("💡 Excel मध्ये 'भूकरमापक' चा कॉलम आढळला नाही.")
                 else:
                     st.warning("मागील महिन्यात 'क प्रत' चा डेटा उपलब्ध नाही.")
 
@@ -594,15 +596,26 @@ if uploaded_file is not None:
             if not surveyor_col_r3:
                 st.error("❌ Upload केलेल्या Excel फाईलमध्ये 'भूकरमापक' चा कॉलम आढळला नाही.")
             else:
-                df_r3_clean = df_raw[df_raw["तालुका"].notna() & df_raw[surveyor_col_r3].notna()].copy()
+                df_r3_clean = df_raw[
+                    df_raw["तालुका"].notna() & df_raw[surveyor_col_r3].notna()
+                ].copy()
 
+                # Status Filter
                 df_r3_pending = df_r3_clean[df_r3_clean["स्थिती"].isin(selected_statuses)].copy()
 
+                # KEY FIX: Column I (मोजणी तारीख) से केवल आज की तारीख या उससे पुरानी तारीखों को ही शामिल करें
+                curr_today = pd.to_datetime(datetime.date.today())
+                df_r3_pending = df_r3_pending[
+                    df_r3_pending["mojni_date_parsed"].notna()
+                    & (df_r3_pending["mojni_date_parsed"] <= curr_today)
+                ].copy()
+
                 if df_r3_pending.empty:
-                    st.warning("निवडलेल्या स्टेटस फिल्टरनुसार कोणताही डेटा उपलब्ध नाही.")
+                    st.warning("निवडलेल्या फिल्टरनुसार कोणताही प्रलंबित डेटा उपलब्ध नाही.")
                 else:
-                    curr_today = pd.to_datetime(datetime.date.today())
-                    df_r3_pending["R3_Pending_Days"] = (curr_today - df_r3_pending["mojni_date_parsed"]).dt.days
+                    df_r3_pending["R3_Pending_Days"] = (
+                        curr_today - df_r3_pending["mojni_date_parsed"]
+                    ).dt.days
 
                     def r3_ageing_bucket(days):
                         if pd.isna(days):
@@ -616,7 +629,7 @@ if uploaded_file is not None:
                         elif days <= 90:
                             return "61–90 दिवस वर"
                         else:
-                            return "90 दिवसा जास्त"
+                            return "90 दिवसांपेक्षा जास्त"
 
                     df_r3_pending["Ageing_Bucket"] = df_r3_pending["R3_Pending_Days"].apply(r3_ageing_bucket)
 
@@ -624,11 +637,15 @@ if uploaded_file is not None:
                         df_r3_pending,
                         index=["तालुका", surveyor_col_r3],
                         columns="Ageing_Bucket",
-                        values="अर्ज क्र.(Application No)" if "अर्ज क्र.(Application No)" in df_r3_pending.columns else df_r3_pending.columns[0],
+                        values=(
+                            "अर्ज क्र.(Application No)"
+                            if "अर्ज क्र.(Application No)" in df_r3_pending.columns
+                            else df_r3_pending.columns[0]
+                        ),
                         aggfunc="count",
                         fill_value=0,
                         margins=True,
-                        margins_name="Grand Total"
+                        margins_name="Grand Total",
                     )
 
                     r3_bucket_order = [
@@ -636,9 +653,9 @@ if uploaded_file is not None:
                         "16–30 दिवस वर",
                         "31–60 दिवस वर",
                         "61–90 दिवस वर",
-                        "90 दिवसा जास्त",
+                        "90 दिवसांपेक्षा जास्त",
                         "(blank)",
-                        "Grand Total"
+                        "Grand Total",
                     ]
 
                     existing_r3_cols = [c for c in r3_bucket_order if c in pivot_r3.columns]
@@ -650,7 +667,7 @@ if uploaded_file is not None:
 
                     @st.cache_data
                     def convert_r3_to_csv(data_frame):
-                        return data_frame.to_csv().encode('utf-8-sig')
+                        return data_frame.to_csv().encode("utf-8-sig")
 
                     r3_csv = convert_r3_to_csv(pivot_r3)
                     st.download_button(
