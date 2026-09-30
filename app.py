@@ -661,96 +661,152 @@ if uploaded_file is not None:
                     existing_r3_cols = [c for c in r3_bucket_order if c in pivot_r3.columns]
                     pivot_r3 = pivot_r3[existing_r3_cols]
 
-                    curr_date_fmt = datetime.date.today().strftime("%d-%m-%Y")
+                    curr_date_fmt = datetime.date.today().strftime("%d/%m/%Y")
                     st.markdown(f"### **मोजणी प्रकरणाबाबत आढावा दिनांक: {curr_date_fmt}**")
-                    st.dataframe(pivot_r3, use_container_width=True, height=600)
+                    st.dataframe(pivot_r3, use_container_width=True, height=500)
 
-                    # --- COLORED EXCEL GENERATION FUNCTION ---
-                    import io
-                    import openpyxl
-                    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+                    # --- DOWNLOAD BUTTONS SECTION ---
+                    col_down1, col_down2 = st.columns(2)
 
-                    def generate_colored_excel(df_pivot):
-                        output = io.BytesIO()
-                        wb = openpyxl.Workbook()
-                        ws = wb.active
-                        ws.title = "Report 3"
+                    # 1. COLORED EXCEL GENERATION
+                    with col_down1:
+                        import io
+                        import openpyxl
+                        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
-                        # Title Header
-                        ws.merge_cells("A1:I1")
-                        title_cell = ws["A1"]
-                        title_cell.value = f"भूकरमापक निहाय व दिवसनिहाय प्रलंबित मोजणी प्रकरणे (आढावा दिनांक: {curr_date_fmt})"
-                        title_cell.font = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
-                        title_cell.fill = PatternFill(start_color="1B4332", end_color="1B4332", fill_type="solid")
-                        title_cell.alignment = Alignment(horizontal="center", vertical="center")
-                        ws.row_dimensions[1].height = 30
+                        def generate_colored_excel(df_pivot):
+                            output = io.BytesIO()
+                            wb = openpyxl.Workbook()
+                            ws = wb.active
+                            ws.title = "Report 3"
 
-                        # Styles & Colors
-                        header_fill = PatternFill(start_color="2B9348", end_color="2B9348", fill_type="solid")
-                        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-                        
-                        total_row_fill = PatternFill(start_color="D9F0A3", end_color="D9F0A3", fill_type="solid")
-                        total_font = Font(name="Calibri", size=11, bold=True, color="000000")
-                        
-                        thin_border = Border(
-                            left=Side(style='thin', color='CCCCCC'),
-                            right=Side(style='thin', color='CCCCCC'),
-                            top=Side(style='thin', color='CCCCCC'),
-                            bottom=Side(style='thin', color='CCCCCC')
+                            ws.merge_cells("A1:I1")
+                            title_cell = ws["A1"]
+                            title_cell.value = f"भूमि अभिलेख विभाग - अमरावती\nभूकरमापक निहाय व दिवसनिहाय प्रलंबित मोजणी प्रकरणे अहवाल (दिनांक {curr_date_fmt})"
+                            title_cell.font = Font(name="Calibri", size=13, bold=True, color="FFFFFF")
+                            title_cell.fill = PatternFill(start_color="1B4332", end_color="1B4332", fill_type="solid")
+                            title_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                            ws.row_dimensions[1].height = 40
+
+                            header_fill = PatternFill(start_color="2B9348", end_color="2B9348", fill_type="solid")
+                            header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+                            
+                            total_row_fill = PatternFill(start_color="D9F0A3", end_color="D9F0A3", fill_type="solid")
+                            total_font = Font(name="Calibri", size=11, bold=True, color="000000")
+                            
+                            thin_border = Border(
+                                left=Side(style='thin', color='CCCCCC'),
+                                right=Side(style='thin', color='CCCCCC'),
+                                top=Side(style='thin', color='CCCCCC'),
+                                bottom=Side(style='thin', color='CCCCCC')
+                            )
+
+                            headers = ["तालुका", "भूकरमापक"] + list(df_pivot.columns)
+                            ws.append([])
+                            ws.append(headers)
+
+                            ws.row_dimensions[3].height = 25
+                            for col_idx in range(1, len(headers) + 1):
+                                cell = ws.cell(row=3, column=col_idx)
+                                cell.fill = header_fill
+                                cell.font = header_font
+                                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+                            for idx, (index_vals, row_data) in enumerate(df_pivot.iterrows()):
+                                taluka_val, surveyor_val = index_vals if isinstance(index_vals, tuple) else (index_vals, "")
+                                row_vals = [taluka_val, surveyor_val] + list(row_data.values)
+                                ws.append(row_vals)
+                                
+                                current_row_idx = ws.max_row
+                                is_grand_total = (taluka_val == "Grand Total")
+
+                                for col_idx in range(1, len(row_vals) + 1):
+                                    cell = ws.cell(row=current_row_idx, column=col_idx)
+                                    cell.border = thin_border
+                                    if is_grand_total:
+                                        cell.fill = total_row_fill
+                                        cell.font = total_font
+                                    else:
+                                        cell.font = Font(name="Calibri", size=10)
+                                    
+                                    cell.alignment = Alignment(horizontal="center" if col_idx > 2 else "left", vertical="center")
+
+                            for col in ws.columns:
+                                max_len = max(len(str(cell.value or '')) for cell in col)
+                                col_letter = openpyxl.utils.get_column_letter(col[0].column)
+                                ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+                            wb.save(output)
+                            return output.getvalue()
+
+                        excel_bytes = generate_colored_excel(pivot_r3)
+                        st.download_button(
+                            label="🎨 Download Excel (.xlsx)",
+                            data=excel_bytes,
+                            file_name=f"Report_3_Bhukarmapak_Pending_{curr_date_fmt.replace('/', '-')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         )
 
-                        # Write Column Headers
-                        headers = ["तालुका", "भूकरमापक"] + list(df_pivot.columns)
-                        ws.append([]) # Row 2 empty spacing
-                        ws.append(headers) # Row 3 Headers
-
-                        ws.row_dimensions[3].height = 25
-                        for col_idx in range(1, len(headers) + 1):
-                            cell = ws.cell(row=3, column=col_idx)
-                            cell.fill = header_fill
-                            cell.font = header_font
-                            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-                        # Write Data
-                        for idx, (index_vals, row_data) in enumerate(df_pivot.iterrows()):
-                            taluka_val, surveyor_val = index_vals if isinstance(index_vals, tuple) else (index_vals, "")
-                            row_vals = [taluka_val, surveyor_val] + list(row_data.values)
-                            ws.append(row_vals)
-                            
-                            current_row_idx = ws.max_row
-                            is_grand_total = (taluka_val == "Grand Total")
-
-                            for col_idx in range(1, len(row_vals) + 1):
-                                cell = ws.cell(row=current_row_idx, column=col_idx)
-                                cell.border = thin_border
+                    # 2. PDF GENERATION (MATCHING THE REFERENCE IMAGE)
+                    with col_down2:
+                        if WEASYPRINT_AVAILABLE:
+                            rows_html_r3 = ""
+                            for index_vals, row_data in pivot_r3.iterrows():
+                                taluka_val, surveyor_val = index_vals if isinstance(index_vals, tuple) else (index_vals, "")
+                                is_total = (taluka_val == "Grand Total")
                                 
-                                if is_grand_total:
-                                    cell.fill = total_row_fill
-                                    cell.font = total_font
-                                else:
-                                    cell.font = Font(name="Calibri", size=10)
+                                tr_style = "background-color: #d9f0a3; font-weight: bold;" if is_total else ""
                                 
-                                if col_idx > 2:
-                                    cell.alignment = Alignment(horizontal="center", vertical="center")
-                                else:
-                                    cell.alignment = Alignment(horizontal="left", vertical="center")
+                                tds = f"<td style='text-align: left;'><b>{taluka_val}</b></td>"
+                                tds += f"<td style='text-align: left;'>{surveyor_val}</td>"
+                                
+                                for col_name in pivot_r3.columns:
+                                    tds += f"<td>{row_data[col_name]}</td>"
+                                
+                                rows_html_r3 += f"<tr style='{tr_style}'>{tds}</tr>"
 
-                        # Auto-fit Column Widths
-                        for col in ws.columns:
-                            max_len = max(len(str(cell.value or '')) for cell in col)
-                            col_letter = openpyxl.utils.get_column_letter(col[0].column)
-                            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+                            headers_html_r3 = "<th>तालुका</th><th>भूकरमापक</th>" + "".join([f"<th>{c}</th>" for c in pivot_r3.columns])
 
-                        wb.save(output)
-                        return output.getvalue()
-
-                    excel_bytes = generate_colored_excel(pivot_r3)
-
-                    st.download_button(
-                        label="🎨 Download Colored Excel Report 3 (.xlsx)",
-                        data=excel_bytes,
-                        file_name=f"Report_3_Bhukarmapak_Pending_{curr_date_fmt}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
+                            html_content_r3 = f"""
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                                <style>
+                                    @page {{ size: A4 landscape; margin: 12mm; }}
+                                    body {{ font-family: 'Gargi', 'DejaVu Sans', sans-serif; font-size: 11px; text-align: center; color: #222; }}
+                                    .header-title {{ font-size: 18px; font-weight: bold; margin-bottom: 4px; color: #1b4332; }}
+                                    .sub-header {{ font-size: 13px; font-weight: bold; margin-bottom: 18px; color: #333; }}
+                                    table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
+                                    th {{ background-color: #2b9348; color: white; padding: 7px 4px; border: 1px solid #1c6632; font-size: 10px; font-weight: bold; text-align: center; }}
+                                    td {{ padding: 5px 4px; border: 1px solid #777; font-size: 10px; text-align: center; }}
+                                    tr:nth-child(even) {{ background-color: #f8f9fa; }}
+                                </style>
+                            </head>
+                            <body>
+                                <div class="header-title">भूमि अभिलेख विभाग - अमरावती</div>
+                                <div class="sub-header">भूकरमापक निहाय व दिवसनिहाय प्रलंबित मोजणी प्रकरणे अहवाल (दिनांक {curr_date_fmt})</div>
+                                <table>
+                                    <thead>
+                                        <tr>{headers_html_r3}</tr>
+                                    </thead>
+                                    <tbody>
+                                        {rows_html_r3}
+                                    </tbody>
+                                </table>
+                            </body>
+                            </html>
+                            """
+                            try:
+                                pdf_bytes_r3 = HTML(string=html_content_r3).write_pdf()
+                                st.download_button(
+                                    label="📄 Download PDF Report 3",
+                                    data=pdf_bytes_r3,
+                                    file_name=f"Report_3_Bhukarmapak_Pending_{curr_date_fmt.replace('/', '-')}.pdf",
+                                    mime="application/pdf",
+                                )
+                            except Exception as e:
+                                st.error(f"PDF जनरेट करताना त्रुटी आली: {e}")
+                        else:
+                            st.warning("⚠️ PDF जनरेशन उपलब्ध नाही (WeasyPrint लायब्ररी नाही).")
 else:
     st.info("👈 कृपया डाव्या बाजूच्या Sidebar मधून E-Mojani ची Excel (.xlsx) फाईल Upload करा.")
