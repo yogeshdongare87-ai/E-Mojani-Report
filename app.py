@@ -31,10 +31,10 @@ st.markdown(
 
 st.title("📊 भूमि अभिलेख विभाग - प्रलंबित मोजणी अहवाल व डैशबोर्ड")
 
-# Sidebar - Filters
-st.sidebar.header("⚙️ Filter Options")
+# Sidebar - File Upload & Filters
+st.sidebar.header("⚙️ Options & Filters")
 
-uploaded_file = st.file_uploader(
+uploaded_file = st.sidebar.file_uploader(
     "Upload Raw E-Mojani Excel File (.xlsx)", type=["xlsx"]
 )
 
@@ -103,18 +103,19 @@ if uploaded_file is not None:
         default=default_selected,
     )
 
-    with st.spinner("Data process ho raha hai..."):
-        tab1, tab2, tab3 = st.tabs([
+    with st.spinner("डेटा प्रोसेस होत आहे... कृपया वाट पहा..."):
+        tab1, tab2, tab3, tab4 = st.tabs([
             "📊 Report 1 (तालुका व दिवसनिहाय)",
             "📋 Report 2 (टप्पा व अधिकारी निहाय)",
             "📈 Executive Dashboard (Charts & Insights)",
+            "📋 Report 3 (भूकरमापक निहाय)",
         ])
 
         from_str = start_date.strftime("%d/%m/%Y")
         to_str = end_date.strftime("%d/%m/%Y")
 
         # ---------------------------------------------------------------------
-        # REPORT 1
+        # TAB 1: REPORT 1 (तालुका व दिवसनिहाय)
         # ---------------------------------------------------------------------
         with tab1:
             df1 = df_raw[df_raw["स्थिती"].isin(selected_statuses)].copy()
@@ -171,6 +172,7 @@ if uploaded_file is not None:
             st.subheader("📋 तालुका व दिवसनिहाय प्रलंबित प्रकरणे Table")
             st.dataframe(pivot_df, use_container_width=True)
 
+            # PDF Generation for Report 1
             rows_html = ""
             for taluka, row in pivot_df.iterrows():
                 is_total = taluka == "एकूण"
@@ -223,7 +225,7 @@ if uploaded_file is not None:
             )
 
         # ---------------------------------------------------------------------
-        # REPORT 2
+        # TAB 2: REPORT 2 (टप्पा व अधिकारी निहाय)
         # ---------------------------------------------------------------------
         with tab2:
             st.subheader("📋 Report 2 - टप्पा व अधिकारी निहाय अहवाल")
@@ -344,7 +346,7 @@ if uploaded_file is not None:
             )
             st.dataframe(df_rep2, use_container_width=True)
 
-            # --- REPORT 2 PDF DOWNLOAD BUTTON (ADDED HERE) ---
+            # PDF Generation for Report 2
             rows_html_r2 = ""
             for idx, row in df_rep2.iterrows():
                 is_tot = row["तालुका"] == "एकूण"
@@ -417,12 +419,11 @@ if uploaded_file is not None:
             )
 
         # ---------------------------------------------------------------------
-        # TAB 3: VISUAL DASHBOARD
+        # TAB 3: EXECUTIVE DASHBOARD
         # ---------------------------------------------------------------------
         with tab3:
             st.markdown("## 🎨 Executive Visual Dashboard")
 
-            # Calculate Previous Month Dates
             today = datetime.date.today()
             first_day_of_curr_month = today.replace(day=1)
             last_day_prev_month = first_day_of_curr_month - datetime.timedelta(
@@ -439,14 +440,13 @@ if uploaded_file is not None:
             p_start_dt = pd.to_datetime(first_day_prev_month)
             p_end_dt = pd.to_datetime(last_day_prev_month)
 
-            # Filter 'क प्रत' cases for Previous Month
             df_prev_kprat = df_raw[
                 (df_raw["mojni_date_parsed"] >= p_start_dt)
                 & (df_raw["mojni_date_parsed"] <= p_end_dt)
                 & (df_raw["स्थिती"] == "क प्रत")
             ].copy()
 
-            # --- COLORFUL KPI CARDS ---
+            # KPI Cards
             c1, c2, c3 = st.columns(3)
             with c1:
                 st.markdown(
@@ -481,7 +481,7 @@ if uploaded_file is not None:
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # --- CHARTS SECTION ---
+            # Charts
             col_chart1, col_chart2 = st.columns(2)
 
             with col_chart1:
@@ -557,8 +557,90 @@ if uploaded_file is not None:
                         )
                 elif not surveyor_col:
                     st.info(
-                        "💡 Excel मध्ये Column J ('भूकरमापक') चा कॉलम आढळला"
-                        " नाही."
+                        "💡 Excel मध्ये Column J ('भूकरमापक') चा कॉलम आढळला नाही."
                     )
                 else:
                     st.warning("मागील महिन्यात 'क प्रत' चा डेटा उपलब्ध नाही.")
+
+        # ---------------------------------------------------------------------
+        # TAB 4: REPORT 3 (भूकरमापक निहाय व दिवसनिहाय प्रलंबित प्रकरणे)
+        # ---------------------------------------------------------------------
+        with tab4:
+            st.markdown("## 📋 रिपोर्ट ३: भूकरमापक निहाय व दिवसनिहाय प्रलंबित मोजणी प्रकरणांचा आढावा")
+
+            surveyor_col_r3 = None
+            for col_name in ["भूकरमापक", "कर्मचारी/अधिकारी चे नाव"]:
+                if col_name in df_raw.columns:
+                    surveyor_col_r3 = col_name
+                    break
+
+            if not surveyor_col_r3:
+                st.error("❌ Upload केलेल्या Excel फाईलमध्ये 'भूकरमापक' चा कॉलम आढळला नाही.")
+            else:
+                df_r3_clean = df_raw[df_raw["तालुका"].notna() & df_raw[surveyor_col_r3].notna()].copy()
+
+                df_r3_pending = df_r3_clean[df_r3_clean["स्थिती"].isin(selected_statuses)].copy()
+
+                if df_r3_pending.empty:
+                    st.warning("निवडलेल्या स्टेटस फिल्टरनुसार कोणताही डेटा उपलब्ध नाही.")
+                else:
+                    curr_today = pd.to_datetime(datetime.date.today())
+                    df_r3_pending["R3_Pending_Days"] = (curr_today - df_r3_pending["mojni_date_parsed"]).dt.days
+
+                    def r3_ageing_bucket(days):
+                        if pd.isna(days):
+                            return "(blank)"
+                        elif days <= 15:
+                            return "0–15 दिवस वर"
+                        elif days <= 30:
+                            return "16–30 दिवस वर"
+                        elif days <= 60:
+                            return "31–60 दिवस वर"
+                        elif days <= 90:
+                            return "61–90 दिवस वर"
+                        else:
+                            return "90 दिवसा जास्त"
+
+                    df_r3_pending["Ageing_Bucket"] = df_r3_pending["R3_Pending_Days"].apply(r3_ageing_bucket)
+
+                    pivot_r3 = pd.pivot_table(
+                        df_r3_pending,
+                        index=["तालुका", surveyor_col_r3],
+                        columns="Ageing_Bucket",
+                        values="अर्ज क्र.(Application No)" if "अर्ज क्र.(Application No)" in df_r3_pending.columns else df_r3_pending.columns[0],
+                        aggfunc="count",
+                        fill_value=0,
+                        margins=True,
+                        margins_name="Grand Total"
+                    )
+
+                    r3_bucket_order = [
+                        "0–15 दिवस वर",
+                        "16–30 दिवस वर",
+                        "31–60 दिवस वर",
+                        "61–90 दिवस वर",
+                        "90 दिवसा जास्त",
+                        "(blank)",
+                        "Grand Total"
+                    ]
+
+                    existing_r3_cols = [c for c in r3_bucket_order if c in pivot_r3.columns]
+                    pivot_r3 = pivot_r3[existing_r3_cols]
+
+                    curr_date_fmt = datetime.date.today().strftime("%d-%m-%Y")
+                    st.markdown(f"### **मोजणी प्रकरणाबाबत आढावा दिनांक: {curr_date_fmt}**")
+                    st.dataframe(pivot_r3, use_container_width=True, height=600)
+
+                    @st.cache_data
+                    def convert_r3_to_csv(data_frame):
+                        return data_frame.to_csv().encode('utf-8-sig')
+
+                    r3_csv = convert_r3_to_csv(pivot_r3)
+                    st.download_button(
+                        label="📥 Download Report 3 (Excel / CSV)",
+                        data=r3_csv,
+                        file_name=f"Report_3_Bhukarmapak_Pending_{curr_date_fmt}.csv",
+                        mime="text/csv",
+                    )
+else:
+    st.info("👈 कृपया डाव्या बाजूच्या Sidebar मधून E-Mojani ची Excel (.xlsx) फाईल Upload करा.")
