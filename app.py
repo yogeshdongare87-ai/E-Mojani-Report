@@ -48,8 +48,8 @@ def convert_df_to_excel(df, sheet_name="Report"):
     return output.getvalue()
 
 
-# PDF / Print Layout Matching the Exact Image Design
-def generate_report4_pdf_html(df, title="मोजणी होणेवर शिल्लक"):
+# PDF / Print Layout Generator
+def generate_report_pdf_html(df, title="अहवाल"):
     headers = list(df.columns)
 
     html = f"""
@@ -116,7 +116,7 @@ def generate_report4_pdf_html(df, title="मोजणी होणेवर श�
         <table>
             <thead>
                 <tr>
-                    <th style="width: 25%;">जिल्हा</th>
+                    <th style="width: 25%;">जिल्हा / तालुका</th>
     """
     for h in headers:
         html += f'<th>{h}</th>'
@@ -127,7 +127,7 @@ def generate_report4_pdf_html(df, title="मोजणी होणेवर श�
     """
 
     for idx, row in df.iterrows():
-        is_total = str(idx).strip() == 'Total'
+        is_total = str(idx).strip() == 'Total' or str(idx).strip() == 'एकूण'
         row_class = 'total-row' if is_total else ''
 
         html += f'<tr class="{row_class}">'
@@ -144,7 +144,7 @@ def generate_report4_pdf_html(df, title="मोजणी होणेवर श�
                 )
                 else str(int(val) if isinstance(val, (int, float)) else val)
             )
-            col_class = 'grand-total-col' if col_name == 'Grand Total' else ''
+            col_class = 'grand-total-col' if col_name == 'Grand Total' or col_name == 'एकूण' else ''
             html += f'<td class="{col_class}">{val_str}</td>'
 
         html += '</tr>'
@@ -168,7 +168,7 @@ def generate_report4_pdf_html(df, title="मोजणी होणेवर श�
 st.sidebar.header('⚙️ File Upload & Options')
 
 uploaded_file = st.sidebar.file_uploader(
-    '📁 Main E-Mojani Raw Excel (.xlsx) [All Reports 1, 2, 3, 4 साठी]',
+    '📁 Main E-Mojani Raw Excel (.xlsx) [All Reports 1, 2, 3, 4, 5 साठी]',
     type=['xlsx'],
     key='single_file',
 )
@@ -214,6 +214,13 @@ if uploaded_file is not None:
 
     df_raw['mojni_date_parsed'] = df_raw[col_mojni_date].apply(parse_excel_date)
 
+    # 'क प्रत निकाली दिनाक' parsing if available
+    col_k_prat_date = 'क प्रत निकाली दिनाक'
+    if col_k_prat_date in df_raw.columns:
+        df_raw['k_prat_date_parsed'] = df_raw[col_k_prat_date].apply(parse_excel_date)
+    else:
+        df_raw['k_prat_date_parsed'] = df_raw['mojni_date_parsed']
+
     min_excel_date = df_raw['mojni_date_parsed'].min()
     max_excel_date = df_raw['mojni_date_parsed'].max()
 
@@ -257,12 +264,13 @@ if uploaded_file is not None:
     )
 
     with st.spinner('डेटा प्रोसेस होत आहे... कृपया वाट पहा...'):
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             '📊 Report 1 (तालुका व दिवसनिहाय)',
             '📋 Report 2 (टप्पा व अधिकारी निहाय)',
             '📈 Executive Dashboard',
             '📋 Report 3 (भूकरमापक निहाय)',
             '📅 Report 4 (मोजणी होणेवर शिल्लक)',
+            '🚀 Report 5 (मागील ३ महिने क प्रत)',
         ])
 
         from_str = start_date.strftime('%d/%m/%Y')
@@ -330,27 +338,17 @@ if uploaded_file is not None:
                     label='📥 Download Report 1 (Excel)',
                     data=excel_r1,
                     file_name='Report_1_Talukani_hay.xlsx',
-                    mime=(
-                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                    ),
+                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 )
             with btn_col2:
-                pdf_r1 = generate_report4_pdf_html(
+                pdf_r1 = generate_report_pdf_html(
                     pivot_df, title='Report 1 - तालुका व दिवसनिहाय'
                 )
                 st.download_button(
                     label='📄 Download Report 1 (PDF / Print)',
                     data=pdf_r1,
-                    file_name=(
-                        'Report_1.pdf'
-                        if WEASYPRINT_AVAILABLE
-                        else 'Report_1.html'
-                    ),
-                    mime=(
-                        'application/pdf'
-                        if WEASYPRINT_AVAILABLE
-                        else 'text/html'
-                    ),
+                    file_name='Report_1.pdf' if WEASYPRINT_AVAILABLE else 'Report_1.html',
+                    mime='application/pdf' if WEASYPRINT_AVAILABLE else 'text/html',
                 )
 
         # TAB 2: REPORT 2
@@ -387,9 +385,7 @@ if uploaded_file is not None:
                 df_t = df_r2_filtered[df_r2_filtered['तालुका'] == tal]
                 df_taluka_all = df_raw[df_raw['तालुका'] == tal]
 
-                chanani = len(
-                    df_t[df_t[col_status] == 'छाननी लिपिक यांनी तपासले']
-                )
+                chanani = len(df_t[df_t[col_status] == 'छाननी लिपिक यांनी तपासले'])
                 shirastedar = len(
                     df_t[
                         df_t[col_status]
@@ -482,27 +478,17 @@ if uploaded_file is not None:
                     label='📥 Download Report 2 (Excel)',
                     data=excel_r2,
                     file_name='Report_2_Stage_Officer.xlsx',
-                    mime=(
-                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                    ),
+                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 )
             with btn_r2_2:
-                pdf_r2 = generate_report4_pdf_html(
+                pdf_r2 = generate_report_pdf_html(
                     df_rep2, title='Report 2 - टप्पा व अधिकारी निहाय'
                 )
                 st.download_button(
                     label='📄 Download Report 2 (PDF / Print)',
                     data=pdf_r2,
-                    file_name=(
-                        'Report_2.pdf'
-                        if WEASYPRINT_AVAILABLE
-                        else 'Report_2.html'
-                    ),
-                    mime=(
-                        'application/pdf'
-                        if WEASYPRINT_AVAILABLE
-                        else 'text/html'
-                    ),
+                    file_name='Report_2.pdf' if WEASYPRINT_AVAILABLE else 'Report_2.html',
+                    mime='application/pdf' if WEASYPRINT_AVAILABLE else 'text/html',
                 )
 
         # TAB 3: EXECUTIVE DASHBOARD
@@ -635,32 +621,20 @@ if uploaded_file is not None:
                             label='📥 Download Report 3 (Excel)',
                             data=excel_r3,
                             file_name='Report_3_Bhukarmapak.xlsx',
-                            mime=(
-                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                            ),
+                            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                         )
                     with btn_r3_2:
-                        pdf_r3 = generate_report4_pdf_html(
+                        pdf_r3 = generate_report_pdf_html(
                             pivot_r3, title='Report 3 - भूकरमापक निहाय'
                         )
                         st.download_button(
                             label='📄 Download Report 3 (PDF / Print)',
                             data=pdf_r3,
-                            file_name=(
-                                'Report_3.pdf'
-                                if WEASYPRINT_AVAILABLE
-                                else 'Report_3.html'
-                            ),
-                            mime=(
-                                'application/pdf'
-                                if WEASYPRINT_AVAILABLE
-                                else 'text/html'
-                            ),
+                            file_name='Report_3.pdf' if WEASYPRINT_AVAILABLE else 'Report_3.html',
+                            mime='application/pdf' if WEASYPRINT_AVAILABLE else 'text/html',
                         )
 
-        # ---------------------------------------------------------------------
-        # TAB 5: REPORT 4 (मोजणी होणेवर शिल्लक - EXACT IMAGE MATCH)
-        # ---------------------------------------------------------------------
+        # TAB 5: REPORT 4 (मोजणी होणेवर शिल्लक)
         with tab5:
             st.markdown('## 📅 रिपोर्ट ४: मोजणी होणेवर शिल्लक अहवाल')
 
@@ -683,13 +657,8 @@ if uploaded_file is not None:
                     f"आजच्या तारखेच्या ({today_ref.strftime('%d/%m/%Y')}) पुढे 'मोजणीची माहिती' स्थितीत प्रकरणे आढळली नाहीत."
                 )
             else:
-                # full month name %B (October, November, December)
-                df_r4['Month_Year'] = df_r4['mojni_date_parsed'].dt.strftime(
-                    '%B'
-                )
-                df_r4['Year_Month_Sort'] = df_r4[
-                    'mojni_date_parsed'
-                ].dt.strftime('%Y-%m')
+                df_r4['Month_Year'] = df_r4['mojni_date_parsed'].dt.strftime('%B')
+                df_r4['Year_Month_Sort'] = df_r4['mojni_date_parsed'].dt.strftime('%Y-%m')
 
                 sorted_months_df = (
                     df_r4[['Year_Month_Sort', 'Month_Year']]
@@ -712,7 +681,6 @@ if uploaded_file is not None:
                 ]
                 pivot_r4 = pivot_r4[cols_in_pivot]
 
-                # Exact Taluka List Order matching your image
                 standard_talukas = [
                     'अंजनगाव',
                     'अचलपूर',
@@ -729,31 +697,15 @@ if uploaded_file is not None:
                     'वरुड',
                 ]
 
-                # Handle spelling variations from Excel
-                present_talukas = pivot_r4.index.tolist()
-                for t in present_talukas:
-                    if t not in standard_talukas:
-                        # map 'अचलपुर' -> 'अचलपूर', 'दर्यापुर' -> 'दर्यापूर'
-                        if t == 'अचलपुर' and 'अचलपूर' in standard_talukas:
-                            continue
-                        elif t == 'दर्यापुर' and 'दर्यापूर' in standard_talukas:
-                            continue
-                        else:
-                            standard_talukas.append(t)
-
-                # Fix mapping if exact names are slightly different in raw file
                 pivot_r4 = pivot_r4.rename(
                     index={'अचलपुर': 'अचलपूर', 'दर्यापुर': 'दर्यापूर'}
                 )
-
                 pivot_r4 = pivot_r4.reindex(standard_talukas, fill_value=0)
                 pivot_r4['Grand Total'] = pivot_r4.sum(axis=1)
 
-                # Total Row at Bottom
                 total_row = pivot_r4.sum(axis=0)
                 pivot_r4.loc['Total'] = total_row
 
-                # Display Formatting (Blank instead of 0)
                 display_r4_df = pivot_r4.astype(object)
                 for col in display_r4_df.columns:
                     display_r4_df[col] = display_r4_df[col].apply(
@@ -772,27 +724,119 @@ if uploaded_file is not None:
                         label='📥 Download Report 4 (Excel)',
                         data=excel_r4,
                         file_name='Report_4_Mojni_Shillak.xlsx',
-                        mime=(
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                        ),
+                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     )
                 with btn_r4_2:
-                    pdf_r4 = generate_report4_pdf_html(
+                    pdf_r4 = generate_report_pdf_html(
                         pivot_r4, title='मोजणी होणेवर शिल्लक'
                     )
                     st.download_button(
                         label='📄 Download Report 4 (PDF / Print Layout)',
                         data=pdf_r4,
-                        file_name=(
-                            'Report_4_Mojni_Shillak.pdf'
-                            if WEASYPRINT_AVAILABLE
-                            else 'Report_4_Mojni_Shillak.html'
-                        ),
-                        mime=(
-                            'application/pdf'
-                            if WEASYPRINT_AVAILABLE
-                            else 'text/html'
-                        ),
+                        file_name='Report_4_Mojni_Shillak.pdf' if WEASYPRINT_AVAILABLE else 'Report_4_Mojni_Shillak.html',
+                        mime='application/pdf' if WEASYPRINT_AVAILABLE else 'text/html',
+                    )
+
+        # ---------------------------------------------------------------------
+        # TAB 6: REPORT 5 (मागील ३ महिने 'क प्रत' झालेला प्रोग्रेस अहवाल)
+        # ---------------------------------------------------------------------
+        with tab6:
+            st.markdown("## 🚀 रिपोर्ट ५: मागील ३ महिन्यांचा 'क प्रत' प्रोग्रेस अहवाल (आजपर्यंत)")
+
+            today_ref_r5 = pd.to_datetime(datetime.date.today())
+            three_months_ago_r5 = today_ref_r5 - pd.Timedelta(days=90)
+
+            # Filter for last 3 months 'क प्रत' cases
+            df_r5 = df_raw[
+                (df_raw['k_prat_date_parsed'].notna())
+                & (df_raw['k_prat_date_parsed'] >= three_months_ago_r5)
+                & (df_raw['k_prat_date_parsed'] <= today_ref_r5)
+            ].copy()
+
+            if col_status in df_r5.columns:
+                df_r5 = df_r5[df_r5[col_status].astype(str).str.contains("क प्रत")]
+
+            st.success(f"🎯 **मागील ३ महिन्यात पूर्ण झालेली एकूण 'क प्रत' प्रकरणे: {len(df_r5)}**")
+
+            if df_r5.empty:
+                st.warning("मागील ३ महिन्यात 'क प्रत' पूर्ण झालेली प्रकरणे आढळली नाहीत.")
+            else:
+                df_r5['Month_Year'] = df_r5['k_prat_date_parsed'].dt.strftime('%B')
+                df_r5['Year_Month_Sort'] = df_r5['k_prat_date_parsed'].dt.strftime('%Y-%m')
+
+                sorted_months_r5 = (
+                    df_r5[['Year_Month_Sort', 'Month_Year']]
+                    .drop_duplicates()
+                    .sort_values('Year_Month_Sort')
+                )
+                sorted_month_names_r5 = sorted_months_r5['Month_Year'].tolist()
+
+                pivot_r5 = pd.pivot_table(
+                    df_r5,
+                    index='तालुका',
+                    columns='Month_Year',
+                    values=df_r5.columns[0],
+                    aggfunc='count',
+                    fill_value=0,
+                )
+
+                cols_in_pivot_r5 = [m for m in sorted_month_names_r5 if m in pivot_r5.columns]
+                pivot_r5 = pivot_r5[cols_in_pivot_r5]
+
+                standard_talukas = [
+                    'अंजनगाव',
+                    'अचलपूर',
+                    'अमरावती',
+                    'चांदुर बा.',
+                    'चिखलदरा',
+                    'तिवसा',
+                    'दर्यापूर',
+                    'धामणगाव',
+                    'धारणी',
+                    'नांदगाव',
+                    'भातकुली',
+                    'मोर्शी',
+                    'वरुड',
+                ]
+
+                pivot_r5 = pivot_r5.rename(
+                    index={'अचलपुर': 'अचलपूर', 'दर्यापुर': 'दर्यापूर'}
+                )
+                pivot_r5 = pivot_r5.reindex(standard_talukas, fill_value=0)
+                pivot_r5['Grand Total'] = pivot_r5.sum(axis=1)
+
+                total_row_r5 = pivot_r5.sum(axis=0)
+                pivot_r5.loc['Total'] = total_row_r5
+
+                display_r5_df = pivot_r5.astype(object)
+                for col in display_r5_df.columns:
+                    display_r5_df[col] = display_r5_df[col].apply(
+                        lambda x: '' if x == 0 or pd.isna(x) else int(x)
+                    )
+
+                st.subheader("📋 मागील ३ महिने 'क प्रत' झालेली प्रकरणे (तालुका व महिना निहाय)")
+                st.dataframe(display_r5_df, use_container_width=True)
+
+                btn_r5_1, btn_r5_2 = st.columns(2)
+                with btn_r5_1:
+                    excel_r5 = convert_df_to_excel(
+                        pivot_r5, sheet_name='Report_5'
+                    )
+                    st.download_button(
+                        label='📥 Download Report 5 (Excel)',
+                        data=excel_r5,
+                        file_name='Report_5_K_Prat_Progress.xlsx',
+                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    )
+                with btn_r5_2:
+                    pdf_r5 = generate_report_pdf_html(
+                        pivot_r5, title="मागील ३ महिने 'क प्रत' प्रोग्रेस अहवाल"
+                    )
+                    st.download_button(
+                        label='📄 Download Report 5 (PDF / Print Layout)',
+                        data=pdf_r5,
+                        file_name='Report_5_K_Prat_Progress.pdf' if WEASYPRINT_AVAILABLE else 'Report_5_K_Prat_Progress.html',
+                        mime='application/pdf' if WEASYPRINT_AVAILABLE else 'text/html',
                     )
 
 else:
