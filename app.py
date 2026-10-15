@@ -18,7 +18,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# Custom Styling (CSS)
+# Custom Styling (CSS) for Streamlit UI
 st.markdown(
     """
     <style>
@@ -48,7 +48,7 @@ def convert_df_to_excel(df, sheet_name="Report"):
     return output.getvalue()
 
 
-# Professional PDF / Print Layout Generator with Department Header & Current Date
+# 🌟 UNIFORM PROFESSIONAL PDF / PRINT LAYOUT GENERATOR FOR ALL REPORTS
 def generate_report_pdf_html(df, subtitle_text=""):
     headers = list(df.columns)
     current_date_str = datetime.date.today().strftime("%d/%m/%Y")
@@ -71,42 +71,45 @@ def generate_report_pdf_html(df, subtitle_text=""):
                 text-align: center;
             }}
             .dept-title {{
-                font-size: 20px;
+                font-size: 18px;
                 font-weight: bold;
                 color: #000000;
-                margin-bottom: 5px;
+                margin-bottom: 4px;
             }}
             .report-title {{
-                font-size: 16px;
+                font-size: 14px;
                 font-weight: bold;
                 color: #1F4E78;
-                margin-bottom: 20px;
+                margin-bottom: 15px;
             }}
             table {{
                 width: 100%;
                 border-collapse: collapse;
                 border: 1.5px solid #000000;
-                margin-top: 10px;
+                margin-top: 5px;
+                table-layout: fixed;
             }}
             th {{
                 background-color: #1F4E78;
                 color: #ffffff;
                 font-weight: bold;
-                font-size: 13px;
-                padding: 10px 6px;
+                font-size: 11px;
+                padding: 8px 4px;
                 border: 1px solid #000000;
                 text-align: center;
+                word-wrap: break-word;
             }}
             td {{
-                padding: 7px 8px;
-                font-size: 12px;
+                padding: 6px 4px;
+                font-size: 11px;
                 border: 1px solid #000000;
                 text-align: center;
                 color: #000000;
+                word-wrap: break-word;
             }}
             .taluka-col {{
                 text-align: left !important;
-                padding-left: 10px !important;
+                padding-left: 8px !important;
                 font-weight: 500;
             }}
             .total-row td {{
@@ -125,7 +128,7 @@ def generate_report_pdf_html(df, subtitle_text=""):
         <table>
             <thead>
                 <tr>
-                    <th style="width: 25%;">जिल्हा / तालुका</th>
+                    <th style="width: 22%;">तालुका</th>
     """
     for h in headers:
         html += f"<th>{h}</th>"
