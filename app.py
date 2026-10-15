@@ -541,7 +541,7 @@ if uploaded_file_raw is not None:
 
         if df_r3_pending.empty:
           st.warning(
-              "निवडलेल्याフィルターनुसार कोणताही प्रलंबित डेटा उपलब्ध नाही."
+              "निवडलेल्या फिल्टरनुसार कोणताही प्रलंबित डेटा उपलब्ध नाही."
           )
         else:
           df_r3_pending["R3_Pending_Days"] = (
@@ -603,7 +603,7 @@ if uploaded_file_raw is not None:
           st.dataframe(pivot_r3, use_container_width=True, height=500)
 
     # ---------------------------------------------------------------------
-    # TAB 5: REPORT 4 (मोजणी होणेवर शिल्लक - Citizen Application File)
+    # TAB 5: REPORT 4 (मोजणी होणेवर शिल्लक - Aaj Ke Date Se Future Cases)
     # ---------------------------------------------------------------------
     with tab5:
       st.markdown("## 📅 रिपोर्ट ४: मोजणी होणेवर शिल्लक अहवाल")
@@ -614,8 +614,19 @@ if uploaded_file_raw is not None:
             "✅ 'Citizen Application' Excel फाईल वापरून रिपोर्ट ४ जनरेट होत आहे."
         )
         df_cit_temp = pd.read_excel(uploaded_file_citizen)
-        if "मोजणी तारीख" not in df_cit_temp.columns:
+
+        date_col_r4 = None
+        for col_candidate in ["मोजणी तारीख", "मोजणीची तारीख", "Mojni Date"]:
+          if col_candidate in df_cit_temp.columns:
+            date_col_r4 = col_candidate
+            break
+
+        if not date_col_r4:
           df_cit_temp = pd.read_excel(uploaded_file_citizen, header=1)
+          for col_candidate in ["मोजणी तारीख", "मोजणीची तारीख", "Mojni Date"]:
+            if col_candidate in df_cit_temp.columns:
+              date_col_r4 = col_candidate
+              break
 
         if "तालुका" in df_cit_temp.columns:
           df_cit_temp["तालुका"] = (
@@ -628,231 +639,251 @@ if uploaded_file_raw is not None:
         if "स्थिती" in df_cit_temp.columns:
           df_cit_temp["स्थिती"] = df_cit_temp["स्थिती"].astype(str).str.strip()
 
-        df_cit_temp["mojni_date_parsed"] = df_cit_temp["मोजणी तारीख"].apply(
-            parse_excel_date
-        )
+        if date_col_r4:
+          df_cit_temp["mojni_date_parsed"] = df_cit_temp[date_col_r4].apply(
+              parse_excel_date
+          )
+
         df_source_r4 = df_cit_temp
       else:
         st.info(
             "💡 टीप: डाव्या Sidebar मधील २ऱ्या Uploader मध्ये 'Citizen"
-            " Application' Excel Upload करू शकता. सध्या १ल्या Excel वरून डेटा"
-            " दाखवत आहे."
+            " Application' Excel Upload करू शकता."
         )
         df_source_r4 = df_raw.copy()
 
-      today_dt_r4 = pd.to_datetime(datetime.date.today())
+      if (
+          df_source_r4 is not None
+          and "mojni_date_parsed" in df_source_r4.columns
+      ):
+        # Explicit Reference Date (15/10/2026 - Aaj ki tareekh)
+        today_ref = pd.to_datetime("2026-10-15")
 
-      # Filter: mojni_date > today & status == "मोजणीची माहिती"
-      df_r4 = df_source_r4[
-          (df_source_r4["mojni_date_parsed"].notna())
-          & (df_source_r4["mojni_date_parsed"] > today_dt_r4)
-          & (df_source_r4["स्थिती"] == "मोजणीची माहिती")
-      ].copy()
+        # Filter strictly > 15/10/2026
+        df_r4 = df_source_r4[
+            (df_source_r4["mojni_date_parsed"].notna())
+            & (df_source_r4["mojni_date_parsed"] > today_ref)
+        ].copy()
 
-      if df_r4.empty:
-        st.warning(
-            "आजच्या तारखेच्या पुढे 'मोजणीची माहिती' स्थितीत असलेली कोणतीही"
-            " प्रकरणे आढळली नाहीत."
-        )
-      else:
-        df_r4["Month_Year"] = df_r4["mojni_date_parsed"].dt.strftime("%b")
-        df_r4["Year_Month_Sort"] = df_r4["mojni_date_parsed"].dt.strftime(
-            "%Y-%m"
-        )
+        if "स्थिती" in df_r4.columns:
+          df_r4 = df_r4[
+              df_r4["स्थिती"].astype(str).str.contains("मोजणीची माहिती")
+          ]
 
-        sorted_months_df = (
-            df_r4[["Year_Month_Sort", "Month_Year"]]
-            .drop_duplicates()
-            .sort_values("Year_Month_Sort")
-        )
-        sorted_month_names = sorted_months_df["Month_Year"].tolist()
-
-        pivot_r4 = pd.pivot_table(
-            df_r4,
-            index="तालुका",
-            columns="Month_Year",
-            values=(
-                "अर्ज क्र.(Application No)"
-                if "अर्ज क्र.(Application No)" in df_r4.columns
-                else df_r4.columns[0]
-            ),
-            aggfunc="count",
-            fill_value=0,
-        )
-
-        cols_in_pivot = [m for m in sorted_month_names if m in pivot_r4.columns]
-        pivot_r4 = pivot_r4[cols_in_pivot]
-
-        standard_talukas = [
-            "अंजनगाव",
-            "अचलपूर",
-            "अमरावती",
-            "चांदुर बा.",
-            "चिखलदरा",
-            "तिवसा",
-            "दर्यापूर",
-            "धामणगाव",
-            "धारणी",
-            "नांदगाव",
-            "भातकुली",
-            "मोर्शी",
-            "वरुड",
-        ]
-
-        pivot_r4 = pivot_r4.reindex(standard_talukas, fill_value=0)
-
-        # Calculate Row Grand Total
-        pivot_r4["Grand Total"] = pivot_r4.sum(axis=1)
-
-        # Calculate District Row (अमरावती)
-        district_total = pivot_r4.sum(axis=0)
-        df_district_row = pd.DataFrame([district_total], index=["अमरावती"])
-
-        final_r4_df = pd.concat([df_district_row, pivot_r4])
-
-        display_r4_df = final_r4_df.astype(object)
-        for col in display_r4_df.columns:
-          display_r4_df[col] = display_r4_df[col].apply(
-              lambda x: "" if x == 0 or pd.isna(x) else int(x)
+        if df_r4.empty:
+          st.warning(
+              f"दिनांक {today_ref.strftime('%d/%m/%Y')} च्या पुढे 'मोजणीची"
+              " माहिती' स्थितीत असलेली कोणतीही प्रकरणे आढळली नाहीत."
+          )
+        else:
+          df_r4["Month_Year"] = df_r4["mojni_date_parsed"].dt.strftime("%b")
+          df_r4["Year_Month_Sort"] = df_r4["mojni_date_parsed"].dt.strftime(
+              "%Y-%m"
           )
 
-        st.subheader("📋 मोजणी होणेवर शिल्लक प्रकरणे (तालुका व महिना निहाय)")
-        st.dataframe(display_r4_df, use_container_width=True)
+          sorted_months_df = (
+              df_r4[["Year_Month_Sort", "Month_Year"]]
+              .drop_duplicates()
+              .sort_values("Year_Month_Sort")
+          )
+          sorted_month_names = sorted_months_df["Month_Year"].tolist()
 
-        col_r4_down1, col_r4_down2 = st.columns(2)
+          pivot_r4 = pd.pivot_table(
+              df_r4,
+              index="तालुका",
+              columns="Month_Year",
+              values=(
+                  "अर्ज क्र.(Application No)"
+                  if "अर्ज क्र.(Application No)" in df_r4.columns
+                  else df_r4.columns[0]
+              ),
+              aggfunc="count",
+              fill_value=0,
+          )
 
-        with col_r4_down1:
-          import openpyxl
-          from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+          cols_in_pivot = [
+              m for m in sorted_month_names if m in pivot_r4.columns
+          ]
+          pivot_r4 = pivot_r4[cols_in_pivot]
 
-          def generate_report4_excel(df_data):
-            output = io.BytesIO()
-            wb = openpyxl.Workbook()
-            ws = wb.active
-            ws.title = "मोजणी होणेवर शिल्लक"
+          standard_talukas = [
+              "अंजनगाव",
+              "अचलपूर",
+              "अमरावती",
+              "चांदुर बा.",
+              "चिखलदरा",
+              "तिवसा",
+              "दर्यापूर",
+              "धामणगाव",
+              "धारणी",
+              "नांदगाव",
+              "भातकुली",
+              "मोर्शी",
+              "वरुड",
+          ]
 
-            navy_fill = PatternFill(
-                start_color="1F4E79", end_color="1F4E79", fill_type="solid"
-            )
-            yellow_fill = PatternFill(
-                start_color="FFE699", end_color="FFE699", fill_type="solid"
-            )
-            white_bold_font = Font(
-                name="Calibri", size=11, bold=True, color="FFFFFF"
-            )
-            black_bold_font = Font(
-                name="Calibri", size=11, bold=True, color="000000"
-            )
-            thin_border = Border(
-                left=Side(style="thin", color="000000"),
-                right=Side(style="thin", color="000000"),
-                top=Side(style="thin", color="000000"),
-                bottom=Side(style="thin", color="000000"),
+          pivot_r4 = pivot_r4.reindex(standard_talukas, fill_value=0)
+
+          # Row Grand Total
+          pivot_r4["Grand Total"] = pivot_r4.sum(axis=1)
+
+          # District Row Total (अमरावती)
+          district_total = pivot_r4.sum(axis=0)
+          df_district_row = pd.DataFrame([district_total], index=["अमरावती"])
+
+          final_r4_df = pd.concat([df_district_row, pivot_r4])
+
+          display_r4_df = final_r4_df.astype(object)
+          for col in display_r4_df.columns:
+            display_r4_df[col] = display_r4_df[col].apply(
+                lambda x: "" if x == 0 or pd.isna(x) else int(x)
             )
 
-            tot_cols = len(df_data.columns) + 1
-            ws.merge_cells(
-                start_row=1, start_column=1, end_row=1, end_column=tot_cols
-            )
-            main_title = ws.cell(row=1, column=1)
-            main_title.value = "मोजणी होणेवर शिल्लक"
-            main_title.font = Font(name="Calibri", size=14, bold=True)
-            main_title.alignment = Alignment(
-                horizontal="center", vertical="center"
-            )
-            ws.row_dimensions[1].height = 28
+          st.subheader("📋 मोजणी होणेवर शिल्लक प्रकरणे (तालुका व महिना निहाय)")
+          st.dataframe(display_r4_df, use_container_width=True)
 
-            headers = ["जिल्हा"] + list(df_data.columns)
-            ws.append(headers)
-            ws.row_dimensions[2].height = 35
+          col_r4_down1, col_r4_down2 = st.columns(2)
 
-            for col_idx in range(1, len(headers) + 1):
-              cell = ws.cell(row=2, column=col_idx)
-              cell.fill = navy_fill
-              cell.font = white_bold_font
-              cell.alignment = Alignment(
-                  horizontal="center", vertical="center", wrap_text=True
+          with col_r4_down1:
+            import openpyxl
+            from openpyxl.styles import (
+                Alignment,
+                Border,
+                Font,
+                PatternFill,
+                Side,
+            )
+
+            def generate_report4_excel(df_data):
+              output = io.BytesIO()
+              wb = openpyxl.Workbook()
+              ws = wb.active
+              ws.title = "मोजणी होणेवर शिल्लक"
+
+              navy_fill = PatternFill(
+                  start_color="1F4E79", end_color="1F4E79", fill_type="solid"
               )
-              cell.border = thin_border
+              yellow_fill = PatternFill(
+                  start_color="FFE699", end_color="FFE699", fill_type="solid"
+              )
+              white_bold_font = Font(
+                  name="Calibri", size=11, bold=True, color="FFFFFF"
+              )
+              black_bold_font = Font(
+                  name="Calibri", size=11, bold=True, color="000000"
+              )
+              thin_border = Border(
+                  left=Side(style="thin", color="000000"),
+                  right=Side(style="thin", color="000000"),
+                  top=Side(style="thin", color="000000"),
+                  bottom=Side(style="thin", color="000000"),
+              )
 
-            for row_label, row_data in df_data.iterrows():
-              row_vals = [row_label] + [
-                  "" if v == 0 or pd.isna(v) else int(v)
-                  for v in row_data.values
-              ]
-              ws.append(row_vals)
-              curr_r = ws.max_row
-              is_district = row_label == "अमरावती"
+              tot_cols = len(df_data.columns) + 1
+              ws.merge_cells(
+                  start_row=1, start_column=1, end_row=1, end_column=tot_cols
+              )
+              main_title = ws.cell(row=1, column=1)
+              main_title.value = "मोजणी होणेवर शिल्लक"
+              main_title.font = Font(name="Calibri", size=14, bold=True)
+              main_title.alignment = Alignment(
+                  horizontal="center", vertical="center"
+              )
+              ws.row_dimensions[1].height = 28
 
-              for c_idx in range(1, len(row_vals) + 1):
-                cell = ws.cell(row=curr_r, column=c_idx)
+              headers = ["जिल्हा"] + list(df_data.columns)
+              ws.append(headers)
+              ws.row_dimensions[2].height = 35
+
+              for col_idx in range(1, len(headers) + 1):
+                cell = ws.cell(row=2, column=col_idx)
+                cell.fill = navy_fill
+                cell.font = white_bold_font
+                cell.alignment = Alignment(
+                    horizontal="center", vertical="center", wrap_text=True
+                )
                 cell.border = thin_border
 
-                if is_district:
-                  cell.font = black_bold_font
-                  cell.alignment = Alignment(
-                      horizontal="center" if c_idx > 1 else "left",
-                      vertical="center",
-                  )
-                else:
-                  if c_idx == len(row_vals):
-                    cell.fill = yellow_fill
+              for row_label, row_data in df_data.iterrows():
+                row_vals = [row_label] + [
+                    "" if v == 0 or pd.isna(v) else int(v)
+                    for v in row_data.values
+                ]
+                ws.append(row_vals)
+                curr_r = ws.max_row
+                is_district = row_label == "अमरावती"
+
+                for c_idx in range(1, len(row_vals) + 1):
+                  cell = ws.cell(row=curr_r, column=c_idx)
+                  cell.border = thin_border
+
+                  if is_district:
                     cell.font = black_bold_font
+                    cell.alignment = Alignment(
+                        horizontal="center" if c_idx > 1 else "left",
+                        vertical="center",
+                    )
                   else:
-                    cell.font = Font(name="Calibri", size=10)
+                    if c_idx == len(row_vals):
+                      cell.fill = yellow_fill
+                      cell.font = black_bold_font
+                    else:
+                      cell.font = Font(name="Calibri", size=10)
 
-                  cell.alignment = Alignment(
-                      horizontal="center" if c_idx > 1 else "left",
-                      vertical="center",
-                  )
+                    cell.alignment = Alignment(
+                        horizontal="center" if c_idx > 1 else "left",
+                        vertical="center",
+                    )
 
-            for col in ws.columns:
-              max_len = max(len(str(cell.value or "")) for cell in col)
-              col_letter = openpyxl.utils.get_column_letter(col[0].column)
-              ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
-
-            wb.save(output)
-            return output.getvalue()
-
-          excel_bytes_r4 = generate_report4_excel(final_r4_df)
-          st.download_button(
-              label="🎨 Download Report 4 Excel (.xlsx)",
-              data=excel_bytes_r4,
-              file_name="Report_4_Mojani_Honevar_Shillak.xlsx",
-              mime=(
-                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              ),
-          )
-
-        with col_r4_down2:
-          if WEASYPRINT_AVAILABLE:
-            rows_html_r4 = ""
-            for row_label, row_data in final_r4_df.iterrows():
-              is_dist = row_label == "अमरावती"
-              tr_st = (
-                  "background-color: #e2efda; font-weight: bold;"
-                  if is_dist
-                  else ""
-              )
-
-              tds = f"<td style='text-align: left;'><b>{row_label}</b></td>"
-              for col_name in final_r4_df.columns:
-                val = row_data[col_name]
-                val_str = "" if val == 0 or pd.isna(val) else str(int(val))
-                bg_style = (
-                    "background-color: #fff2cc; font-weight: bold;"
-                    if (col_name == "Grand Total" and not is_dist)
-                    else ""
+              for col in ws.columns:
+                max_len = max(
+                    len(str(cell.value or "")) for cell in col
                 )
-                tds += f"<td style='{bg_style}'>{val_str}</td>"
+                col_letter = openpyxl.utils.get_column_letter(col[0].column)
+                ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
-              rows_html_r4 += f"<tr style='{tr_st}'>{tds}</tr>"
+              wb.save(output)
+              return output.getvalue()
 
-            headers_html_r4 = "<th>जिल्हा</th>" + "".join(
-                [f"<th>{c}</th>" for c in final_r4_df.columns]
+            excel_bytes_r4 = generate_report4_excel(final_r4_df)
+            st.download_button(
+                label="🎨 Download Report 4 Excel (.xlsx)",
+                data=excel_bytes_r4,
+                file_name="Report_4_Mojani_Honevar_Shillak.xlsx",
+                mime=(
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                ),
             )
 
-            html_content_r4 = f"""
+          with col_r4_down2:
+            if WEASYPRINT_AVAILABLE:
+              rows_html_r4 = ""
+              for row_label, row_data in final_r4_df.iterrows():
+                is_dist = row_label == "अमरावती"
+                tr_st = (
+                    "background-color: #e2efda; font-weight: bold;"
+                    if is_dist
+                    else ""
+                )
+
+                tds = f"<td style='text-align: left;'><b>{row_label}</b></td>"
+                for col_name in final_r4_df.columns:
+                  val = row_data[col_name]
+                  val_str = "" if val == 0 or pd.isna(val) else str(int(val))
+                  bg_style = (
+                      "background-color: #fff2cc; font-weight: bold;"
+                      if (col_name == "Grand Total" and not is_dist)
+                      else ""
+                  )
+                  tds += f"<td style='{bg_style}'>{val_str}</td>"
+
+                rows_html_r4 += f"<tr style='{tr_st}'>{tds}</tr>"
+
+              headers_html_r4 = "<th>जिल्हा</th>" + "".join(
+                  [f"<th>{c}</th>" for c in final_r4_df.columns]
+              )
+
+              html_content_r4 = f"""
                         <!DOCTYPE html>
                         <html>
                         <head>
@@ -879,18 +910,18 @@ if uploaded_file_raw is not None:
                         </body>
                         </html>
                         """
-            try:
-              pdf_bytes_r4 = HTML(string=html_content_r4).write_pdf()
-              st.download_button(
-                  label="📄 Download Report 4 PDF",
-                  data=pdf_bytes_r4,
-                  file_name="Report_4_Mojani_Honevar_Shillak.pdf",
-                  mime="application/pdf",
-              )
-            except Exception as e:
-              st.error(f"PDF जनरेट करताना त्रुटी आली: {e}")
-          else:
-            st.warning("⚠️ PDF जनरेशन उपलब्ध नाही (WeasyPrint नाही).")
+              try:
+                pdf_bytes_r4 = HTML(string=html_content_r4).write_pdf()
+                st.download_button(
+                    label="📄 Download Report 4 PDF",
+                    data=pdf_bytes_r4,
+                    file_name="Report_4_Mojani_Honevar_Shillak.pdf",
+                    mime="application/pdf",
+                )
+              except Exception as e:
+                st.error(f"PDF जनरेट करताना त्रुटी आली: {e}")
+            else:
+              st.warning("⚠️ PDF जनरेशन उपलब्ध नाही (WeasyPrint नाही).")
 
 else:
   st.info(
