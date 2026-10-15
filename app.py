@@ -39,13 +39,19 @@ st.markdown(
 
 st.title("📊 भूमि अभिलेख विभाग - प्रलंबित मोजणी अहवाल व डैशबोर्ड")
 
-# Sidebar - Multiple File Upload & Filters
-st.sidebar.header("⚙️ Options & Filters")
+# Sidebar - File Uploads & Filters
+st.sidebar.header("⚙️ Options & File Uploads")
 
-uploaded_files = st.sidebar.file_uploader(
-    "Upload Raw E-Mojani Excel File(s) (.xlsx)",
+uploaded_file_raw = st.sidebar.file_uploader(
+    "1️⃣ Main E-Mojani Raw Excel (.xlsx) [Reports 1, 2, 3 साठी]",
     type=["xlsx"],
-    accept_multiple_files=True,
+    key="file_raw",
+)
+
+uploaded_file_citizen = st.sidebar.file_uploader(
+    "2️⃣ Citizen Application Excel (.xlsx) [Report 4 साठी]",
+    type=["xlsx"],
+    key="file_citizen",
 )
 
 
@@ -59,15 +65,10 @@ def parse_excel_date(val):
     return pd.to_datetime(val, dayfirst=True, errors="coerce")
 
 
-if uploaded_files:
-  df_list = []
-  for file in uploaded_files:
-    df_temp = pd.read_excel(file)
-    if "मोजणी तारीख" not in df_temp.columns:
-      df_temp = pd.read_excel(file, header=1)
-    df_list.append(df_temp)
-
-  df_raw = pd.concat(df_list, ignore_index=True)
+if uploaded_file_raw is not None:
+  df_raw = pd.read_excel(uploaded_file_raw)
+  if "मोजणी तारीख" not in df_raw.columns:
+    df_raw = pd.read_excel(uploaded_file_raw, header=1)
 
   # Text Cleaning
   if "तालुका" in df_raw.columns:
@@ -188,10 +189,7 @@ if uploaded_files:
 
       pivot_df = pivot_df[existing_cols]
 
-      st.success(
-          f"✅ Total Combined Filtered Cases: **{len(df1)}** (From"
-          f" {len(uploaded_files)} File(s))"
-      )
+      st.success(f"✅ Total Filtered Cases: **{len(df1)}**")
       st.info(f"📅 **Selected Pending Period:** {from_str} ते {to_str}")
 
       st.subheader("📋 तालुका व दिवसनिहाय प्रलंबित प्रकरणे Table")
@@ -543,7 +541,7 @@ if uploaded_files:
 
         if df_r3_pending.empty:
           st.warning(
-              "निवडलेल्या फिल्टरनुसार कोणताही प्रलंबित डेटा उपलब्ध नाही."
+              "निवडलेल्याフィルターनुसार कोणताही प्रलंबित डेटा उपलब्ध नाही."
           )
         else:
           df_r3_pending["R3_Pending_Days"] = (
@@ -605,18 +603,50 @@ if uploaded_files:
           st.dataframe(pivot_r3, use_container_width=True, height=500)
 
     # ---------------------------------------------------------------------
-    # TAB 5: REPORT 4 (मोजणी होणेवर शिल्लक - Future Pending Cases)
+    # TAB 5: REPORT 4 (मोजणी होणेवर शिल्लक - Citizen Application File)
     # ---------------------------------------------------------------------
     with tab5:
       st.markdown("## 📅 रिपोर्ट ४: मोजणी होणेवर शिल्लक अहवाल")
 
+      df_source_r4 = None
+      if uploaded_file_citizen is not None:
+        st.success(
+            "✅ 'Citizen Application' Excel फाईल वापरून रिपोर्ट ४ जनरेट होत आहे."
+        )
+        df_cit_temp = pd.read_excel(uploaded_file_citizen)
+        if "मोजणी तारीख" not in df_cit_temp.columns:
+          df_cit_temp = pd.read_excel(uploaded_file_citizen, header=1)
+
+        if "तालुका" in df_cit_temp.columns:
+          df_cit_temp["तालुका"] = (
+              df_cit_temp["तालुका"].astype(str).str.strip()
+          )
+          df_cit_temp = df_cit_temp[
+              df_cit_temp["तालुका"].notna()
+              & (~df_cit_temp["तालुका"].isin(["", "nan", "None", "0"]))
+          ]
+        if "स्थिती" in df_cit_temp.columns:
+          df_cit_temp["स्थिती"] = df_cit_temp["स्थिती"].astype(str).str.strip()
+
+        df_cit_temp["mojni_date_parsed"] = df_cit_temp["मोजणी तारीख"].apply(
+            parse_excel_date
+        )
+        df_source_r4 = df_cit_temp
+      else:
+        st.info(
+            "💡 टीप: डाव्या Sidebar मधील २ऱ्या Uploader मध्ये 'Citizen"
+            " Application' Excel Upload करू शकता. सध्या १ल्या Excel वरून डेटा"
+            " दाखवत आहे."
+        )
+        df_source_r4 = df_raw.copy()
+
       today_dt_r4 = pd.to_datetime(datetime.date.today())
 
       # Filter: mojni_date > today & status == "मोजणीची माहिती"
-      df_r4 = df_raw[
-          (df_raw["mojni_date_parsed"].notna())
-          & (df_raw["mojni_date_parsed"] > today_dt_r4)
-          & (df_raw["स्थिती"] == "मोजणीची माहिती")
+      df_r4 = df_source_r4[
+          (df_source_r4["mojni_date_parsed"].notna())
+          & (df_source_r4["mojni_date_parsed"] > today_dt_r4)
+          & (df_source_r4["स्थिती"] == "मोजणीची माहिती")
       ].copy()
 
       if df_r4.empty:
@@ -625,7 +655,6 @@ if uploaded_files:
             " प्रकरणे आढळली नाहीत."
         )
       else:
-        # Create Month Name and Month Sort Key
         df_r4["Month_Year"] = df_r4["mojni_date_parsed"].dt.strftime("%b")
         df_r4["Year_Month_Sort"] = df_r4["mojni_date_parsed"].dt.strftime(
             "%Y-%m"
@@ -865,6 +894,6 @@ if uploaded_files:
 
 else:
   st.info(
-      "👈 कृपया डाव्या बाजूच्या Sidebar मधून E-Mojani ची Excel (.xlsx) फाईल/फाईल्स"
-      " Upload करा."
+      "👈 कृपया डाव्या बाजूच्या Sidebar मधून E-Mojani ची Raw Excel फाईल Upload"
+      " करा."
   )
