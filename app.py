@@ -39,117 +39,40 @@ st.markdown(
 
 st.title("📊 भूमि अभिलेख विभाग - प्रलंबित मोजणी अहवाल व डैशबोर्ड")
 
-# Helper functions for downloading Excel
+# Helper functions for downloading Excel and PDF
 def convert_df_to_excel(df, sheet_name="Report"):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, sheet_name=sheet_name)
     return output.getvalue()
 
-# Image layout styling matching PDF / Print Generator
-def generate_report4_pdf_html(df, title="मोजणी होणेवर शिल्लक"):
-    headers = list(df.columns)
-    
-    html = f"""
-    <!DOCTYPE html>
+
+def convert_df_to_pdf_html(df, title="Report"):
+    html_content = f"""
     <html>
     <head>
-        <meta charset="utf-8">
         <style>
-            @page {{
-                size: A4 portrait;
-                margin: 15mm;
-            }}
-            body {{
-                font-family: 'DejaVu Sans', 'Arial', sans-serif;
-                margin: 0;
-                padding: 10px;
-                background-color: #ffffff;
-            }}
-            .report-title {{
-                text-align: center;
-                font-size: 20px;
-                font-weight: bold;
-                color: #1F4E78;
-                margin-bottom: 20px;
-            }}
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-                border: 1.5px solid #000000;
-            }}
-            th {{
-                background-color: #1F4E78;
-                color: #ffffff;
-                font-weight: bold;
-                font-size: 13px;
-                padding: 10px 6px;
-                border: 1px solid #000000;
-                text-align: center;
-            }}
-            td {{
-                padding: 8px 10px;
-                font-size: 12px;
-                border: 1px solid #000000;
-                text-align: center;
-            }}
-            .taluka-col {{
-                text-align: left !important;
-                padding-left: 12px !important;
-            }}
-            .district-row td {{
-                background-color: #E2EFDA !important;
-                font-weight: bold;
-            }}
-            .grand-total-col {{
-                background-color: #FFF2CC !important;
-                font-weight: bold;
-            }}
+            body {{ font-family: Arial, sans-serif; margin: 20px; }}
+            h2 {{ color: #1b4332; text-align: center; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+            th, td {{ border: 1px solid #dddddd; text-align: center; padding: 8px; font-size: 12px; }}
+            th {{ background-color: #2b9348; color: white; }}
+            tr:nth-child(even) {{ background-color: #f2f2f2; }}
         </style>
     </head>
     <body>
-        <div class="report-title">{title}</div>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 30%;">जिल्हा / तालुका</th>
-    """
-    for h in headers:
-        html += f'<th>{h}</th>'
-    html += """
-                </tr>
-            </thead>
-            <tbody>
-    """
-    
-    for idx, row in df.iterrows():
-        is_district = (str(idx).strip() == "अमरावती")
-        row_class = "district-row" if is_district else ""
-        
-        html += f'<tr class="{row_class}">'
-        html += f'<td class="taluka-col">{idx}</td>'
-        
-        for col_name in headers:
-            val = row[col_name]
-            val_str = "" if (pd.isna(val) or val == 0 or str(val).strip() in ["", "0"]) else str(int(val) if isinstance(val, (int, float)) else val)
-            col_class = "grand-total-col" if col_name == "Grand Total" else ""
-            html += f'<td class="{col_class}">{val_str}</td>'
-            
-        html += '</tr>'
-        
-    html += """
-            </tbody>
-        </table>
+        <h2>{title}</h2>
+        {df.to_html(classes='data', header=True, index=True)}
     </body>
     </html>
     """
     if WEASYPRINT_AVAILABLE:
         try:
-            return HTML(string=html).write_pdf()
+            return HTML(string=html_content).write_pdf()
         except Exception:
-            return html.encode('utf-8')
+            return html_content.encode('utf-8')
     else:
-        return html.encode('utf-8')
+        return html_content.encode('utf-8')
 
 
 # Sidebar - Single File Upload & Filters
@@ -308,17 +231,18 @@ if uploaded_file is not None:
             st.subheader("📋 तालुका व दिवसनिहाय प्रलंबित प्रकरणे Table")
             st.dataframe(pivot_df, use_container_width=True)
 
+            # Download Buttons
             btn_col1, btn_col2 = st.columns(2)
             with btn_col1:
                 excel_r1 = convert_df_to_excel(pivot_df, sheet_name="Report_1")
                 st.download_button(
                     label="📥 Download Report 1 (Excel)",
                     data=excel_r1,
-                    file_name="Report_1_Talukani_hay.xlsx",
+                    file_name="Report_1_Talukani hay.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
             with btn_col2:
-                pdf_r1 = generate_report4_pdf_html(pivot_df, title="Report 1 - तालुका व दिवसनिहाय")
+                pdf_r1 = convert_df_to_pdf_html(pivot_df, title="Report 1 - तालुका व दिवसनिहाय")
                 st.download_button(
                     label="📄 Download Report 1 (PDF / Print)",
                     data=pdf_r1,
@@ -448,6 +372,7 @@ if uploaded_file is not None:
             )
             st.dataframe(df_rep2, use_container_width=True)
 
+            # Download Buttons for Report 2
             btn_r2_1, btn_r2_2 = st.columns(2)
             with btn_r2_1:
                 excel_r2 = convert_df_to_excel(df_rep2, sheet_name="Report_2")
@@ -458,7 +383,7 @@ if uploaded_file is not None:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
             with btn_r2_2:
-                pdf_r2 = generate_report4_pdf_html(df_rep2, title="Report 2 - टप्पा व अधिकारी निहाय")
+                pdf_r2 = convert_df_to_pdf_html(df_rep2, title="Report 2 - टप्पा व अधिकारी निहाय")
                 st.download_button(
                     label="📄 Download Report 2 (PDF / Print)",
                     data=pdf_r2,
@@ -587,6 +512,7 @@ if uploaded_file is not None:
                     pivot_r3 = pivot_r3[existing_r3_cols]
                     st.dataframe(pivot_r3, use_container_width=True)
 
+                    # Download Buttons for Report 3
                     btn_r3_1, btn_r3_2 = st.columns(2)
                     with btn_r3_1:
                         excel_r3 = convert_df_to_excel(pivot_r3, sheet_name="Report_3")
@@ -597,7 +523,7 @@ if uploaded_file is not None:
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         )
                     with btn_r3_2:
-                        pdf_r3 = generate_report4_pdf_html(pivot_r3, title="Report 3 - भूकरमापक निहाय")
+                        pdf_r3 = convert_df_to_pdf_html(pivot_r3, title="Report 3 - भूकरमापक निहाय")
                         st.download_button(
                             label="📄 Download Report 3 (PDF / Print)",
                             data=pdf_r3,
@@ -613,6 +539,7 @@ if uploaded_file is not None:
 
             today_ref = pd.to_datetime(datetime.date.today())
 
+            # Filter: Date >= Today & Status = 'मोजणीची माहिती'
             df_r4 = df_raw[
                 (df_raw["mojni_date_parsed"].notna())
                 & (df_raw["mojni_date_parsed"] >= today_ref)
@@ -676,12 +603,10 @@ if uploaded_file is not None:
                 pivot_r4 = pivot_r4.reindex(standard_talukas, fill_value=0)
                 pivot_r4["Grand Total"] = pivot_r4.sum(axis=1)
 
-                district_total = pivot_r4.sum(axis=0)
-                df_district_row = pd.DataFrame([district_total], index=["अमरावती"])
+                total_row = pivot_r4.sum(axis=0)
+                pivot_r4.loc["Total"] = total_row
 
-                final_r4_df = pd.concat([df_district_row, pivot_r4])
-
-                display_r4_df = final_r4_df.astype(object)
+                display_r4_df = pivot_r4.astype(object)
                 for col in display_r4_df.columns:
                     display_r4_df[col] = display_r4_df[col].apply(
                         lambda x: "" if x == 0 or pd.isna(x) else int(x)
@@ -690,9 +615,10 @@ if uploaded_file is not None:
                 st.subheader("📋 मोजणी होणेवर शिल्लक प्रकरणे (तालुका व महिना निहाय)")
                 st.dataframe(display_r4_df, use_container_width=True)
 
+                # Download Buttons for Report 4
                 btn_r4_1, btn_r4_2 = st.columns(2)
                 with btn_r4_1:
-                    excel_r4 = convert_df_to_excel(final_r4_df, sheet_name="Report_4")
+                    excel_r4 = convert_df_to_excel(pivot_r4, sheet_name="Report_4")
                     st.download_button(
                         label="📥 Download Report 4 (Excel)",
                         data=excel_r4,
@@ -700,11 +626,11 @@ if uploaded_file is not None:
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
                 with btn_r4_2:
-                    pdf_r4 = generate_report4_pdf_html(final_r4_df, title="मोजणी होणेवर शिल्लक")
+                    pdf_r4 = convert_df_to_pdf_html(pivot_r4, title="Report 4 - मोजणी होणेवर शिल्लक")
                     st.download_button(
-                        label="📄 Download Report 4 (PDF / Print Layout)",
+                        label="📄 Download Report 4 (PDF / Print)",
                         data=pdf_r4,
-                        file_name="Report_4_Mojni_Shillak.pdf" if WEASYPRINT_AVAILABLE else "Report_4_Mojni_Shillak.html",
+                        file_name="Report_4.pdf" if WEASYPRINT_AVAILABLE else "Report_4.html",
                         mime="application/pdf" if WEASYPRINT_AVAILABLE else "text/html",
                     )
 
