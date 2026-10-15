@@ -70,7 +70,6 @@ if uploaded_file_raw is not None:
   if "मोजणी तारीख" not in df_raw.columns:
     df_raw = pd.read_excel(uploaded_file_raw, header=1)
 
-  # Text Cleaning
   if "तालुका" in df_raw.columns:
     df_raw["तालुका"] = df_raw["तालुका"].astype(str).str.strip()
     df_raw = df_raw[
@@ -96,7 +95,7 @@ if uploaded_file_raw is not None:
   else:
     max_excel_date = max_excel_date.date()
 
-  # --- SIDEBAR FILTERS ---
+  # Sidebar Filters
   st.sidebar.markdown("---")
   st.sidebar.subheader("📅 Report 1 कालावधी (Date Range)")
 
@@ -137,12 +136,9 @@ if uploaded_file_raw is not None:
     from_str = start_date.strftime("%d/%m/%Y")
     to_str = end_date.strftime("%d/%m/%Y")
 
-    # ---------------------------------------------------------------------
-    # TAB 1: REPORT 1 (तालुका व दिवसनिहाय)
-    # ---------------------------------------------------------------------
+    # TAB 1: REPORT 1
     with tab1:
       df1 = df_raw[df_raw["स्थिती"].isin(selected_statuses)].copy()
-
       start_dt = pd.to_datetime(start_date)
       end_dt = pd.to_datetime(end_date)
 
@@ -168,7 +164,6 @@ if uploaded_file_raw is not None:
           return "90 दिवसांपेक्षा जास्त"
 
       df1["दिवस वर"] = df1["Pending Days"].apply(day_bucket)
-
       bucket_order = [
           "15 दिवस वर",
           "30 दिवस वर",
@@ -180,7 +175,6 @@ if uploaded_file_raw is not None:
       pivot_df = pd.crosstab(
           df1["तालुका"], df1["दिवस वर"], margins=True, margins_name="एकूण"
       )
-
       existing_cols = [c for c in bucket_order if c in pivot_df.columns]
       if "तारीख उपलब्ध नाही" in pivot_df.columns:
         existing_cols.append("तारीख उपलब्ध नाही")
@@ -191,71 +185,12 @@ if uploaded_file_raw is not None:
 
       st.success(f"✅ Total Filtered Cases: **{len(df1)}**")
       st.info(f"📅 **Selected Pending Period:** {from_str} ते {to_str}")
-
       st.subheader("📋 तालुका व दिवसनिहाय प्रलंबित प्रकरणे Table")
       st.dataframe(pivot_df, use_container_width=True)
 
-      if WEASYPRINT_AVAILABLE:
-        rows_html = ""
-        for taluka, row in pivot_df.iterrows():
-          is_total = taluka == "एकूण"
-          tr_style = (
-              "background-color: #d9f0a3; font-weight: bold;" if is_total else ""
-          )
-          tds = f"<td><b>{taluka}</b></td>"
-          for col in existing_cols:
-            tds += f"<td style='text-align: center;'>{row[col]}</td>"
-          rows_html += f"<tr style='{tr_style}'>{tds}</tr>"
-
-        headers_html = "<th>तालुका</th>" + "".join(
-            [f"<th>{c}</th>" for c in existing_cols]
-        )
-
-        html_content = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <style>
-                        @page {{ size: A4 portrait; margin: 15mm; }}
-                        body {{ font-family: 'Gargi', 'DejaVu Sans', sans-serif; font-size: 11px; }}
-                        h2 {{ text-align: center; margin-bottom: 5px; color: #1b4332; }}
-                        .date-header {{ text-align: center; font-size: 13px; font-weight: bold; margin-bottom: 15px; }}
-                        table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-                        th {{ background-color: #2b9348; color: white; padding: 6px; border: 1px solid #555; font-size: 10px; }}
-                        td {{ padding: 5px; border: 1px solid #888; font-size: 10px; }}
-                        tr:nth-child(even) {{ background-color: #f9f9f9; }}
-                    </style>
-                </head>
-                <body>
-                    <h2>भूमि अभिलेख विभाग - अमरावती</h2>
-                    <div class="date-header">तालुका व दिवसनिहाय प्रलंबित मोजणी प्रकरणे अहवाल (दिनांक {from_str} ते {to_str})</div>
-                    <table>
-                        <thead><tr>{headers_html}</tr></thead>
-                        <tbody>{rows_html}</tbody>
-                    </table>
-                </body>
-                </html>
-                """
-        try:
-          pdf_bytes = HTML(string=html_content).write_pdf()
-          st.download_button(
-              label="📥 Download PDF Report 1",
-              data=pdf_bytes,
-              file_name=(
-                  "Mojani_Pending_Report1_"
-                  f"{from_str.replace('/', '-')}_to_{to_str.replace('/', '-')}.pdf"
-              ),
-              mime="application/pdf",
-          )
-        except Exception as e:
-          st.error(f"PDF जनरेट करताना त्रुटी आली: {e}")
-
-    # ---------------------------------------------------------------------
-    # TAB 2: REPORT 2 (टप्पा व अधिकारी निहाय)
-    # ---------------------------------------------------------------------
+    # TAB 2: REPORT 2
     with tab2:
       st.subheader("📋 Report 2 - टप्पा व अधिकारी निहाय अहवाल")
-
       col_r2_d1, col_r2_d2 = st.columns(2)
       r2_start_date = col_r2_d1.date_input(
           "पासून (From)", value=min_excel_date, key="r2_start"
@@ -266,7 +201,6 @@ if uploaded_file_raw is not None:
 
       r2_from_str = r2_start_date.strftime("%d/%m/%Y")
       r2_to_str = r2_end_date.strftime("%d/%m/%Y")
-
       st.info(f"🗓 **Report 2 Period:** {r2_from_str} ते {r2_to_str}")
 
       r2_start_dt = pd.to_datetime(r2_start_date)
@@ -354,7 +288,6 @@ if uploaded_file_raw is not None:
         })
 
       df_rep2 = pd.DataFrame(report2_data)
-
       total_row = {
           "तालुका": "एकूण",
           "Yes/No": df_rep2["Yes/No"].sum(),
@@ -375,12 +308,9 @@ if uploaded_file_raw is not None:
       )
       st.dataframe(df_rep2, use_container_width=True)
 
-    # ---------------------------------------------------------------------
     # TAB 3: EXECUTIVE DASHBOARD
-    # ---------------------------------------------------------------------
     with tab3:
       st.markdown("## 🎨 Executive Visual Dashboard")
-
       today = datetime.date.today()
       first_day_of_curr_month = today.replace(day=1)
       last_day_prev_month = first_day_of_curr_month - datetime.timedelta(
@@ -403,147 +333,52 @@ if uploaded_file_raw is not None:
           & (df_raw["स्थिती"] == "क प्रत")
       ].copy()
 
-      # KPI Cards
       c1, c2, c3 = st.columns(3)
       with c1:
         st.markdown(
-            f"""
-                    <div class="metric-card" style="border-left-color: #2a9d8f;">
-                        <div class="metric-title">🏆 मागील महिन्यात 'क प्रत' निकाल</div>
-                        <div class="metric-value">{len(df_prev_kprat)}</div>
-                    </div>
-                """,
+            f'<div class="metric-card"><div class="metric-title">🏆 मागील'
+            " महिन्यात 'क प्रत'"
+            f' निकाल</div><div class="metric-value">{len(df_prev_kprat)}</div></div>',
             unsafe_allow_html=True,
         )
       with c2:
         st.markdown(
-            f"""
-                    <div class="metric-card" style="border-left-color: #e76f51;">
-                        <div class="metric-title">⏳ एकूण प्रलंबित प्रकरणे</div>
-                        <div class="metric-value">{len(df_raw[~df_raw["स्थिती"].isin(completed_defaults)])}</div>
-                    </div>
-                """,
+            f'<div class="metric-card"><div class="metric-title">⏳ एकूण प्रलंबित'
+            " प्रकरणे</div><div"
+            f' class="metric-value">{len(df_raw[~df_raw["स्थिती"].isin(completed_defaults)])}</div></div>',
             unsafe_allow_html=True,
         )
       with c3:
         st.markdown(
-            f"""
-                    <div class="metric-card" style="border-left-color: #f4a261;">
-                        <div class="metric-title">📌 आजच्या तारखेनंतरची शिल्लक प्रकरणे</div>
-                        <div class="metric-value">{len(df_raw[(df_raw["mojni_date_parsed"] > today_dt) & (df_raw["स्थिती"] == "मोजणीची माहिती")])}</div>
-                    </div>
-                """,
+            f'<div class="metric-card"><div class="metric-title">📌 आजच्या'
+            " तारखेनंतरची शिल्लक प्रकरणे</div><div"
+            f' class="metric-value">{len(df_raw[(df_raw["mojni_date_parsed"] > today_dt) & (df_raw["स्थिती"] == "मोजणीची माहिती")])}</div></div>',
             unsafe_allow_html=True,
         )
 
-      st.markdown("<br>", unsafe_allow_html=True)
-
-      col_chart1, col_chart2 = st.columns(2)
-
-      with col_chart1:
-        st.markdown("### 🥇 Top 3 तालुका ('क प्रत')")
-        if not df_prev_kprat.empty:
-          top_t = (
-              df_prev_kprat["तालुका"].value_counts().head(3).reset_index()
-          )
-          top_t.columns = ["तालुका", "संख्या"]
-
-          fig_taluka = px.bar(
-              top_t,
-              x="तालुका",
-              y="संख्या",
-              text="संख्या",
-              color="तालुका",
-              color_discrete_sequence=px.colors.qualitative.Set2,
-              title="Top 3 तालुका - 'क प्रत' कामगिरी",
-          )
-          fig_taluka.update_traces(textposition="outside")
-          fig_taluka.update_layout(showlegend=False, height=350)
-          st.plotly_chart(fig_taluka, use_container_width=True)
-        else:
-          st.warning("मागील महिन्यात 'क प्रत' चा डेटा उपलब्ध नाही.")
-
-      with col_chart2:
-        st.markdown("### 👷 Top भूकरमापक ('क प्रत')")
-
-        surveyor_col = None
-        for col_name in ["भूकरमापक", "कर्मचारी/अधिकारी चे नाव"]:
-          if col_name in df_raw.columns:
-            surveyor_col = col_name
-            break
-
-        if surveyor_col and not df_prev_kprat.empty:
-          df_surveyor_filtered = df_prev_kprat[
-              df_prev_kprat[surveyor_col].notna()
-              & (df_prev_kprat[surveyor_col].astype(str).str.strip() != "")
-          ]
-
-          top_s = (
-              df_surveyor_filtered[surveyor_col]
-              .value_counts()
-              .head(5)
-              .reset_index()
-          )
-          top_s.columns = ["भूकरमापक नाव", "संख्या"]
-
-          if not top_s.empty:
-            fig_surv = px.bar(
-                top_s,
-                x="संख्या",
-                y="भूकरमापक नाव",
-                orientation="h",
-                text="संख्या",
-                color="भूकरमापक नाव",
-                color_discrete_sequence=px.colors.qualitative.Pastel,
-                title="सर्वोत्तम कामगिरी करणारे भूकरमापक",
-            )
-            fig_surv.update_traces(textposition="outside")
-            fig_surv.update_layout(
-                showlegend=False,
-                height=350,
-                yaxis=dict(autorange="reversed"),
-            )
-            st.plotly_chart(fig_surv, use_container_width=True)
-
-    # ---------------------------------------------------------------------
-    # TAB 4: REPORT 3 (भूकरमापक निहाय व दिवसनिहाय प्रलंबित प्रकरणे)
-    # ---------------------------------------------------------------------
+    # TAB 4: REPORT 3
     with tab4:
-      st.markdown(
-          "## 📋 रिपोर्ट ३: भूकरमापक निहाय व दिवसनिहाय प्रलंबित मोजणी प्रकरणांचा"
-          " आढावा"
-      )
-
+      st.markdown("## 📋 रिपोर्ट ३: भूकरमापक निहाय व दिवसनिहाय")
       surveyor_col_r3 = None
       for col_name in ["भूकरमापक", "कर्मचारी/अधिकारी चे नाव"]:
         if col_name in df_raw.columns:
           surveyor_col_r3 = col_name
           break
 
-      if not surveyor_col_r3:
-        st.error(
-            "❌ Upload केलेल्या Excel फाईलमध्ये 'भूकरमापक' चा कॉलम आढळला नाही."
-        )
-      else:
+      if surveyor_col_r3:
         df_r3_clean = df_raw[
             df_raw["तालुका"].notna() & df_raw[surveyor_col_r3].notna()
         ].copy()
-
         df_r3_pending = df_r3_clean[
             df_r3_clean["स्थिती"].isin(selected_statuses)
         ].copy()
-
         curr_today = pd.to_datetime(datetime.date.today())
         df_r3_pending = df_r3_pending[
             df_r3_pending["mojni_date_parsed"].notna()
             & (df_r3_pending["mojni_date_parsed"] <= curr_today)
         ].copy()
 
-        if df_r3_pending.empty:
-          st.warning(
-              "निवडलेल्या फिल्टरनुसार कोणताही प्रलंबित डेटा उपलब्ध नाही."
-          )
-        else:
+        if not df_r3_pending.empty:
           df_r3_pending["R3_Pending_Days"] = (
               curr_today - df_r3_pending["mojni_date_parsed"]
           ).dt.days
@@ -565,7 +400,6 @@ if uploaded_file_raw is not None:
           df_r3_pending["Ageing_Bucket"] = df_r3_pending[
               "R3_Pending_Days"
           ].apply(r3_ageing_bucket)
-
           pivot_r3 = pd.pivot_table(
               df_r3_pending,
               index=["तालुका", surveyor_col_r3],
@@ -580,7 +414,6 @@ if uploaded_file_raw is not None:
               margins=True,
               margins_name="Grand Total",
           )
-
           r3_bucket_order = [
               "0–15 दिवस वर",
               "16–30 दिवस वर",
@@ -590,43 +423,32 @@ if uploaded_file_raw is not None:
               "(blank)",
               "Grand Total",
           ]
-
           existing_r3_cols = [
               c for c in r3_bucket_order if c in pivot_r3.columns
           ]
           pivot_r3 = pivot_r3[existing_r3_cols]
+          st.dataframe(pivot_r3, use_container_width=True)
 
-          curr_date_fmt = datetime.date.today().strftime("%d/%m/%Y")
-          st.markdown(
-              f"### **मोजणी प्रकरणाबाबत आढावा दिनांक: {curr_date_fmt}**"
-          )
-          st.dataframe(pivot_r3, use_container_width=True, height=500)
-
-    # ---------------------------------------------------------------------
-    # TAB 5: REPORT 4 (मोजणी होणेवर शिल्लक - Aaj Ke Date Se Future Cases)
-    # ---------------------------------------------------------------------
+    # TAB 5: REPORT 4 (Strictly from 2nd Excel - Column O)
     with tab5:
       st.markdown("## 📅 रिपोर्ट ४: मोजणी होणेवर शिल्लक अहवाल")
 
-      df_source_r4 = None
       if uploaded_file_citizen is not None:
-        st.success(
-            "✅ 'Citizen Application' Excel फाईल वापरून रिपोर्ट ४ जनरेट होत आहे."
-        )
+        st.success("✅ 2nd Excel (Citizen Application) - Column O चा वापर करून रिपोर्ट ४ तयार होत आहे.")
         df_cit_temp = pd.read_excel(uploaded_file_citizen)
 
+        if "मोजणी तारीख" not in df_cit_temp.columns and "तालुका" not in df_cit_temp.columns:
+          df_cit_temp = pd.read_excel(uploaded_file_citizen, header=1)
+
+        # Force Column O or exact 'मोजणी तारीख' name
         date_col_r4 = None
+        if len(df_cit_temp.columns) >= 15:
+          date_col_r4 = df_cit_temp.columns[14]  # Index 14 = Column O
+        
         for col_candidate in ["मोजणी तारीख", "मोजणीची तारीख", "Mojni Date"]:
           if col_candidate in df_cit_temp.columns:
             date_col_r4 = col_candidate
             break
-
-        if not date_col_r4:
-          df_cit_temp = pd.read_excel(uploaded_file_citizen, header=1)
-          for col_candidate in ["मोजणी तारीख", "मोजणीची तारीख", "Mojni Date"]:
-            if col_candidate in df_cit_temp.columns:
-              date_col_r4 = col_candidate
-              break
 
         if "तालुका" in df_cit_temp.columns:
           df_cit_temp["तालुका"] = (
@@ -636,6 +458,7 @@ if uploaded_file_raw is not None:
               df_cit_temp["तालुका"].notna()
               & (~df_cit_temp["तालुका"].isin(["", "nan", "None", "0"]))
           ]
+
         if "स्थिती" in df_cit_temp.columns:
           df_cit_temp["स्थिती"] = df_cit_temp["स्थिती"].astype(str).str.strip()
 
@@ -644,25 +467,12 @@ if uploaded_file_raw is not None:
               parse_excel_date
           )
 
-        df_source_r4 = df_cit_temp
-      else:
-        st.info(
-            "💡 टीप: डाव्या Sidebar मधील २ऱ्या Uploader मध्ये 'Citizen"
-            " Application' Excel Upload करू शकता."
-        )
-        df_source_r4 = df_raw.copy()
+        today_ref = pd.to_datetime(datetime.date.today())
 
-      if (
-          df_source_r4 is not None
-          and "mojni_date_parsed" in df_source_r4.columns
-      ):
-        # Explicit Reference Date (15/10/2026 - Aaj ki tareekh)
-        today_ref = pd.to_datetime("2026-10-15")
-
-        # Filter strictly > 15/10/2026
-        df_r4 = df_source_r4[
-            (df_source_r4["mojni_date_parsed"].notna())
-            & (df_source_r4["mojni_date_parsed"] > today_ref)
+        # Filter: Date > Today & Status contains "मोजणीची माहिती"
+        df_r4 = df_cit_temp[
+            (df_cit_temp["mojni_date_parsed"].notna())
+            & (df_cit_temp["mojni_date_parsed"] > today_ref)
         ].copy()
 
         if "स्थिती" in df_r4.columns:
@@ -672,8 +482,7 @@ if uploaded_file_raw is not None:
 
         if df_r4.empty:
           st.warning(
-              f"दिनांक {today_ref.strftime('%d/%m/%Y')} च्या पुढे 'मोजणीची"
-              " माहिती' स्थितीत असलेली कोणतीही प्रकरणे आढळली नाहीत."
+              f"आजच्या तारखेच्या ({today_ref.strftime('%d/%m/%Y')}) पुढे 'मोजणीची माहिती' स्थितीत प्रकरणे आढळली नाहीत."
           )
         else:
           df_r4["Month_Year"] = df_r4["mojni_date_parsed"].dt.strftime("%b")
@@ -688,15 +497,17 @@ if uploaded_file_raw is not None:
           )
           sorted_month_names = sorted_months_df["Month_Year"].tolist()
 
+          app_col = df_r4.columns[0]
+          for ac in ["अर्ज क्र.", "अर्ज क्र.(Application No)"]:
+            if ac in df_r4.columns:
+              app_col = ac
+              break
+
           pivot_r4 = pd.pivot_table(
               df_r4,
               index="तालुका",
               columns="Month_Year",
-              values=(
-                  "अर्ज क्र.(Application No)"
-                  if "अर्ज क्र.(Application No)" in df_r4.columns
-                  else df_r4.columns[0]
-              ),
+              values=app_col,
               aggfunc="count",
               fill_value=0,
           )
@@ -723,11 +534,8 @@ if uploaded_file_raw is not None:
           ]
 
           pivot_r4 = pivot_r4.reindex(standard_talukas, fill_value=0)
-
-          # Row Grand Total
           pivot_r4["Grand Total"] = pivot_r4.sum(axis=1)
 
-          # District Row Total (अमरावती)
           district_total = pivot_r4.sum(axis=0)
           df_district_row = pd.DataFrame([district_total], index=["अमरावती"])
 
@@ -920,11 +728,8 @@ if uploaded_file_raw is not None:
                 )
               except Exception as e:
                 st.error(f"PDF जनरेट करताना त्रुटी आली: {e}")
-            else:
-              st.warning("⚠️ PDF जनरेशन उपलब्ध नाही (WeasyPrint नाही).")
+      else:
+        st.info("👈 कृपया डाव्या बाजूला 2nd Uploader मध्ये 'Citizen Application' Excel फाईल Upload करा.")
 
 else:
-  st.info(
-      "👈 कृपया डाव्या बाजूच्या Sidebar मधून E-Mojani ची Raw Excel फाईल Upload"
-      " करा."
-  )
+  st.info("👈 कृपया डाव्या बाजूच्या Sidebar मधून Excel फाईल्स Upload करा.")
