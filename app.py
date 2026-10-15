@@ -6,11 +6,11 @@ import streamlit as st
 
 # WeasyPrint check for PDF generation
 try:
-    from weasyprint import HTML
+  from weasyprint import HTML
 
-    WEASYPRINT_AVAILABLE = True
+  WEASYPRINT_AVAILABLE = True
 except Exception:
-    WEASYPRINT_AVAILABLE = False
+  WEASYPRINT_AVAILABLE = False
 
 # Page Setup
 st.set_page_config(
@@ -39,34 +39,46 @@ st.markdown(
 
 st.title("📊 भूमि अभिलेख विभाग - प्रलंबित मोजणी अहवाल व डैशबोर्ड")
 
-# Sidebar - File Upload & Filters
+# Sidebar - Multiple File Upload & Filters
 st.sidebar.header("⚙️ Options & Filters")
 
-uploaded_file = st.sidebar.file_uploader(
-    "Upload Raw E-Mojani Excel File (.xlsx)", type=["xlsx"]
+uploaded_files = st.sidebar.file_uploader(
+    "Upload Raw E-Mojani Excel File(s) (.xlsx)",
+    type=["xlsx"],
+    accept_multiple_files=True,
 )
 
 
 def parse_excel_date(val):
-  if pd.isna(val) or val == "":
+  if pd.isna(val) or str(val).strip() in ["", "nan", "NaT"]:
     return pd.NaT
   try:
     val_num = float(val)
     return datetime.datetime(1899, 12, 30) + datetime.timedelta(days=val_num)
   except Exception:
-    return pd.to_datetime(val, errors="coerce")
+    return pd.to_datetime(val, dayfirst=True, errors="coerce")
 
 
-if uploaded_file is not None:
-  df_raw = pd.read_excel(uploaded_file)
-  if "मोजणी तारीख" not in df_raw.columns:
-    df_raw = pd.read_excel(uploaded_file, header=1)
+if uploaded_files:
+  df_list = []
+  for file in uploaded_files:
+    df_temp = pd.read_excel(file)
+    if "मोजणी तारीख" not in df_temp.columns:
+      df_temp = pd.read_excel(file, header=1)
+    df_list.append(df_temp)
 
+  df_raw = pd.concat(df_list, ignore_index=True)
+
+  # Text Cleaning
   if "तालुका" in df_raw.columns:
+    df_raw["तालुका"] = df_raw["तालुका"].astype(str).str.strip()
     df_raw = df_raw[
         df_raw["तालुका"].notna()
-        & (df_raw["तालुका"].astype(str).str.strip() != "")
+        & (~df_raw["तालुका"].isin(["", "nan", "None", "0"]))
     ]
+
+  if "स्थिती" in df_raw.columns:
+    df_raw["स्थिती"] = df_raw["स्थिती"].astype(str).str.strip()
 
   df_raw["mojni_date_parsed"] = df_raw["मोजणी तारीख"].apply(parse_excel_date)
 
@@ -176,7 +188,10 @@ if uploaded_file is not None:
 
       pivot_df = pivot_df[existing_cols]
 
-      st.success(f"✅ Total Filtered Cases: **{len(df1)}**")
+      st.success(
+          f"✅ Total Combined Filtered Cases: **{len(df1)}** (From"
+          f" {len(uploaded_files)} File(s))"
+      )
       st.info(f"📅 **Selected Pending Period:** {from_str} ते {to_str}")
 
       st.subheader("📋 तालुका व दिवसनिहाय प्रलंबित प्रकरणे Table")
@@ -236,10 +251,6 @@ if uploaded_file is not None:
           )
         except Exception as e:
           st.error(f"PDF जनरेट करताना त्रुटी आली: {e}")
-      else:
-        st.warning(
-            "⚠️ PDF जनरेशन उपलब्ध नाही (WeasyPrint लायब्ररी इंस्टाल नाही)."
-        )
 
     # ---------------------------------------------------------------------
     # TAB 2: REPORT 2 (टप्पा व अधिकारी निहाय)
@@ -366,84 +377,6 @@ if uploaded_file is not None:
       )
       st.dataframe(df_rep2, use_container_width=True)
 
-      if WEASYPRINT_AVAILABLE:
-        rows_html_r2 = ""
-        for idx, row in df_rep2.iterrows():
-          is_tot = row["तालुका"] == "एकूण"
-          st_cls = (
-              "background-color: #d3d3d3; font-weight: bold;" if is_tot else ""
-          )
-          rows_html_r2 += f"""
-                    <tr style="{st_cls}">
-                        <td style="text-align:left;"><b>{row['तालुका']}</b></td>
-                        <td>{row['Yes/No']}</td>
-                        <td>{row['जमा करणेवर']}</td>
-                        <td>{row['हददी दाखविणेवर']}</td>
-                        <td>{row['शिल्लक प्रकरणे']}</td>
-                        <td style="background-color: #f0f0f0;"><b>{row['Grand Total']}</b></td>
-                        <td>{row['छाननी लिपीक']}</td>
-                        <td>{row['शिरस्तेदार/मुख्यालय सहाय्यक']}</td>
-                        <td>{row['उप अ भू अ/ भू अ']}</td>
-                        <td style="background-color: #f0f0f0;"><b>{row['Grand Total ']}</b></td>
-                    </tr>
-                    """
-
-        html_content_r2 = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <style>
-                        @page {{ size: A4 landscape; margin: 10mm; }}
-                        body {{ font-family: 'Gargi', 'DejaVu Sans', sans-serif; font-size: 11px; text-align: center; }}
-                        .title {{ font-size: 16px; font-weight: bold; margin-bottom: 15px; text-align: center; }}
-                        table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
-                        th {{ background-color: #bfbfbf; color: black; padding: 6px; border: 1px solid #000; font-size: 10px; text-align: center; }}
-                        td {{ padding: 5px; border: 1px solid #000; font-size: 10px; text-align: center; }}
-                        tr:nth-child(even) {{ background-color: #fdfdfd; }}
-                    </style>
-                </head>
-                <body>
-                    <div class="title">टप्पा व अधिकारी निहाय अहवाल (दिनांक {r2_from_str} ते {r2_to_str})</div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>तालुका</th>
-                                <th>Yes/No</th>
-                                <th>जमा करणेवर</th>
-                                <th>हददी दाखविणेवर</th>
-                                <th>शिल्लक प्रकरणे</th>
-                                <th>Grand Total</th>
-                                <th>छाननी लिपीक</th>
-                                <th>शिरस्तेदार/<br>मुख्यालय सहाय्यक</th>
-                                <th>उप अ भू अ/<br>भू अ</th>
-                                <th>Grand Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rows_html_r2}
-                        </tbody>
-                    </table>
-                </body>
-                </html>
-                """
-        try:
-          pdf_bytes_r2 = HTML(string=html_content_r2).write_pdf()
-          st.download_button(
-              label="📥 Download PDF Report 2",
-              data=pdf_bytes_r2,
-              file_name=(
-                  "Mojani_Report2_"
-                  f"{r2_from_str.replace('/', '-')}_to_{r2_to_str.replace('/', '-')}.pdf"
-              ),
-              mime="application/pdf",
-          )
-        except Exception as e:
-          st.error(f"PDF जनरेट करताना त्रुटी आली: {e}")
-      else:
-        st.warning(
-            "⚠️ PDF जनरेशन उपलब्ध नाही (WeasyPrint लायब्ररी इंस्टाल नाही)."
-        )
-
     # ---------------------------------------------------------------------
     # TAB 3: EXECUTIVE DASHBOARD
     # ---------------------------------------------------------------------
@@ -507,7 +440,6 @@ if uploaded_file is not None:
 
       st.markdown("<br>", unsafe_allow_html=True)
 
-      # Charts
       col_chart1, col_chart2 = st.columns(2)
 
       with col_chart1:
@@ -574,12 +506,6 @@ if uploaded_file is not None:
                 yaxis=dict(autorange="reversed"),
             )
             st.plotly_chart(fig_surv, use_container_width=True)
-          else:
-            st.warning("'क प्रत' केसेसमध्ये भूकरमापकांची नावे उपलब्ध नाहीत.")
-        elif not surveyor_col:
-          st.info("💡 Excel मध्ये 'भूकरमापक' चा कॉलम आढळला नाही.")
-        else:
-          st.warning("मागील महिन्यात 'क प्रत' चा डेटा उपलब्ध नाही.")
 
     # ---------------------------------------------------------------------
     # TAB 4: REPORT 3 (भूकरमापक निहाय व दिवसनिहाय प्रलंबित प्रकरणे)
@@ -678,204 +604,6 @@ if uploaded_file is not None:
           )
           st.dataframe(pivot_r3, use_container_width=True, height=500)
 
-          col_down1, col_down2 = st.columns(2)
-
-          with col_down1:
-            import openpyxl
-            from openpyxl.styles import (
-                Alignment,
-                Border,
-                Font,
-                PatternFill,
-                Side,
-            )
-
-            def generate_colored_excel(df_pivot):
-              output = io.BytesIO()
-              wb = openpyxl.Workbook()
-              ws = wb.active
-              ws.title = "Report 3"
-
-              ws.merge_cells("A1:I1")
-              title_cell = ws["A1"]
-              title_cell.value = (
-                  "भूमि अभिलेख विभाग - अमरावती\nभूकरमापक निहाय व दिवसनिहाय"
-                  f" प्रलंबित मोजणी प्रकरणे अहवाल (दिनांक {curr_date_fmt})"
-              )
-              title_cell.font = Font(
-                  name="Calibri", size=13, bold=True, color="FFFFFF"
-              )
-              title_cell.fill = PatternFill(
-                  start_color="1B4332", end_color="1B4332", fill_type="solid"
-              )
-              title_cell.alignment = Alignment(
-                  horizontal="center", vertical="center", wrap_text=True
-              )
-              ws.row_dimensions[1].height = 40
-
-              header_fill = PatternFill(
-                  start_color="2B9348", end_color="2B9348", fill_type="solid"
-              )
-              header_font = Font(
-                  name="Calibri", size=11, bold=True, color="FFFFFF"
-              )
-
-              total_row_fill = PatternFill(
-                  start_color="D9F0A3", end_color="D9F0A3", fill_type="solid"
-              )
-              total_font = Font(
-                  name="Calibri", size=11, bold=True, color="000000"
-              )
-
-              thin_border = Border(
-                  left=Side(style="thin", color="CCCCCC"),
-                  right=Side(style="thin", color="CCCCCC"),
-                  top=Side(style="thin", color="CCCCCC"),
-                  bottom=Side(style="thin", color="CCCCCC"),
-              )
-
-              headers = ["तालुका", "भूकरमापक"] + list(df_pivot.columns)
-              ws.append([])
-              ws.append(headers)
-
-              ws.row_dimensions[3].height = 25
-              for col_idx in range(1, len(headers) + 1):
-                cell = ws.cell(row=3, column=col_idx)
-                cell.fill = header_fill
-                cell.font = header_font
-                cell.alignment = Alignment(
-                    horizontal="center", vertical="center", wrap_text=True
-                )
-
-              for idx, (index_vals, row_data) in enumerate(
-                  df_pivot.iterrows()
-              ):
-                taluka_val, surveyor_val = (
-                    index_vals
-                    if isinstance(index_vals, tuple)
-                    else (index_vals, "")
-                )
-                row_vals = [taluka_val, surveyor_val] + list(row_data.values)
-                ws.append(row_vals)
-
-                current_row_idx = ws.max_row
-                is_grand_total = taluka_val == "Grand Total"
-
-                for col_idx in range(1, len(row_vals) + 1):
-                  cell = ws.cell(row=current_row_idx, column=col_idx)
-                  cell.border = thin_border
-                  if is_grand_total:
-                    cell.fill = total_row_fill
-                    cell.font = total_font
-                  else:
-                    cell.font = Font(name="Calibri", size=10)
-
-                  cell.alignment = Alignment(
-                      horizontal="center" if col_idx > 2 else "left",
-                      vertical="center",
-                  )
-
-              for col in ws.columns:
-                max_len = max(
-                    len(str(cell.value or "")) for cell in col
-                )
-                col_letter = openpyxl.utils.get_column_letter(col[0].column)
-                ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
-
-              wb.save(output)
-              return output.getvalue()
-
-            excel_bytes = generate_colored_excel(pivot_r3)
-            st.download_button(
-                label="🎨 Download Excel (.xlsx)",
-                data=excel_bytes,
-                file_name=(
-                    "Report_3_Bhukarmapak_Pending_"
-                    f"{curr_date_fmt.replace('/', '-')}.xlsx"
-                ),
-                mime=(
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                ),
-            )
-
-          with col_down2:
-            if WEASYPRINT_AVAILABLE:
-              rows_html_r3 = ""
-              for index_vals, row_data in pivot_r3.iterrows():
-                taluka_val, surveyor_val = (
-                    index_vals
-                    if isinstance(index_vals, tuple)
-                    else (index_vals, "")
-                )
-                is_total = taluka_val == "Grand Total"
-
-                tr_style = (
-                    "background-color: #d9f0a3; font-weight: bold;"
-                    if is_total
-                    else ""
-                )
-
-                tds = (
-                    f"<td style='text-align: left;'><b>{taluka_val}</b></td>"
-                )
-                tds += f"<td style='text-align: left;'>{surveyor_val}</td>"
-
-                for col_name in pivot_r3.columns:
-                  tds += f"<td>{row_data[col_name]}</td>"
-
-                rows_html_r3 += f"<tr style='{tr_style}'>{tds}</tr>"
-
-              headers_html_r3 = "<th>तालुका</th><th>भूकरमापक</th>" + "".join(
-                  [f"<th>{c}</th>" for c in pivot_r3.columns]
-              )
-
-              html_content_r3 = f"""
-                            <!DOCTYPE html>
-                            <html>
-                            <head>
-                                <style>
-                                    @page {{ size: A4 landscape; margin: 12mm; }}
-                                    body {{ font-family: 'Gargi', 'DejaVu Sans', sans-serif; font-size: 11px; text-align: center; color: #222; }}
-                                    .header-title {{ font-size: 18px; font-weight: bold; margin-bottom: 4px; color: #1b4332; }}
-                                    .sub-header {{ font-size: 13px; font-weight: bold; margin-bottom: 18px; color: #333; }}
-                                    table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
-                                    th {{ background-color: #2b9348; color: white; padding: 7px 4px; border: 1px solid #1c6632; font-size: 10px; font-weight: bold; text-align: center; }}
-                                    td {{ padding: 5px 4px; border: 1px solid #777; font-size: 10px; text-align: center; }}
-                                    tr:nth-child(even) {{ background-color: #f8f9fa; }}
-                                </style>
-                            </head>
-                            <body>
-                                <div class="header-title">भूमि अभिलेख विभाग - अमरावती</div>
-                                <div class="sub-header">भूकरमापक निहाय व दिवसनिहाय प्रलंबित मोजणी प्रकरणे अहवाल (दिनांक {curr_date_fmt})</div>
-                                <table>
-                                    <thead>
-                                        <tr>{headers_html_r3}</tr>
-                                    </thead>
-                                    <tbody>
-                                        {rows_html_r3}
-                                    </tbody>
-                                </table>
-                            </body>
-                            </html>
-                            """
-              try:
-                pdf_bytes_r3 = HTML(string=html_content_r3).write_pdf()
-                st.download_button(
-                    label="📄 Download PDF Report 3",
-                    data=pdf_bytes_r3,
-                    file_name=(
-                        "Report_3_Bhukarmapak_Pending_"
-                        f"{curr_date_fmt.replace('/', '-')}.pdf"
-                    ),
-                    mime="application/pdf",
-                )
-              except Exception as e:
-                st.error(f"PDF जनरेट करताना त्रुटी आली: {e}")
-            else:
-              st.warning(
-                  "⚠️ PDF जनरेशन उपलब्ध नाही (WeasyPrint लायब्ररी नाही)."
-              )
-
     # ---------------------------------------------------------------------
     # TAB 5: REPORT 4 (मोजणी होणेवर शिल्लक - Future Pending Cases)
     # ---------------------------------------------------------------------
@@ -897,13 +625,12 @@ if uploaded_file is not None:
             " प्रकरणे आढळली नाहीत."
         )
       else:
-        # Create Month-Year column
+        # Create Month Name and Month Sort Key
         df_r4["Month_Year"] = df_r4["mojni_date_parsed"].dt.strftime("%b")
         df_r4["Year_Month_Sort"] = df_r4["mojni_date_parsed"].dt.strftime(
             "%Y-%m"
         )
 
-        # Get sorted list of months
         sorted_months_df = (
             df_r4[["Year_Month_Sort", "Month_Year"]]
             .drop_duplicates()
@@ -911,7 +638,6 @@ if uploaded_file is not None:
         )
         sorted_month_names = sorted_months_df["Month_Year"].tolist()
 
-        # Pivot table: Taluka vs Month
         pivot_r4 = pd.pivot_table(
             df_r4,
             index="तालुका",
@@ -925,11 +651,9 @@ if uploaded_file is not None:
             fill_value=0,
         )
 
-        # Reorder columns chronologically
         cols_in_pivot = [m for m in sorted_month_names if m in pivot_r4.columns]
         pivot_r4 = pivot_r4[cols_in_pivot]
 
-        # Standard Taluka list matching Amravati district
         standard_talukas = [
             "अंजनगाव",
             "अचलपूर",
@@ -946,30 +670,26 @@ if uploaded_file is not None:
             "वरुड",
         ]
 
-        # Ensure all talukas exist in index
         pivot_r4 = pivot_r4.reindex(standard_talukas, fill_value=0)
 
         # Calculate Row Grand Total
         pivot_r4["Grand Total"] = pivot_r4.sum(axis=1)
 
-        # Calculate District Total Row (अमरावती)
+        # Calculate District Row (अमरावती)
         district_total = pivot_r4.sum(axis=0)
         df_district_row = pd.DataFrame([district_total], index=["अमरावती"])
 
-        # Final table: District Total at top, followed by Talukas
         final_r4_df = pd.concat([df_district_row, pivot_r4])
 
-        # Replace 0 with blank string for clean view matching image
         display_r4_df = final_r4_df.astype(object)
         for col in display_r4_df.columns:
           display_r4_df[col] = display_r4_df[col].apply(
-              lambda x: "" if x == 0 or pd.isna(x) else x
+              lambda x: "" if x == 0 or pd.isna(x) else int(x)
           )
 
         st.subheader("📋 मोजणी होणेवर शिल्लक प्रकरणे (तालुका व महिना निहाय)")
         st.dataframe(display_r4_df, use_container_width=True)
 
-        # Download Buttons for Report 4
         col_r4_down1, col_r4_down2 = st.columns(2)
 
         with col_r4_down1:
@@ -982,7 +702,6 @@ if uploaded_file is not None:
             ws = wb.active
             ws.title = "मोजणी होणेवर शिल्लक"
 
-            # Dark Navy Header Fill matching Image
             navy_fill = PatternFill(
                 start_color="1F4E79", end_color="1F4E79", fill_type="solid"
             )
@@ -1002,7 +721,6 @@ if uploaded_file is not None:
                 bottom=Side(style="thin", color="000000"),
             )
 
-            # Row 1: Main Header
             tot_cols = len(df_data.columns) + 1
             ws.merge_cells(
                 start_row=1, start_column=1, end_row=1, end_column=tot_cols
@@ -1015,7 +733,6 @@ if uploaded_file is not None:
             )
             ws.row_dimensions[1].height = 28
 
-            # Row 2: Sub Headers
             headers = ["जिल्हा"] + list(df_data.columns)
             ws.append(headers)
             ws.row_dimensions[2].height = 35
@@ -1029,9 +746,11 @@ if uploaded_file is not None:
               )
               cell.border = thin_border
 
-            # Data Rows
             for row_label, row_data in df_data.iterrows():
-              row_vals = [row_label] + list(row_data.values)
+              row_vals = [row_label] + [
+                  "" if v == 0 or pd.isna(v) else int(v)
+                  for v in row_data.values
+              ]
               ws.append(row_vals)
               curr_r = ws.max_row
               is_district = row_label == "अमरावती"
@@ -1047,7 +766,6 @@ if uploaded_file is not None:
                       vertical="center",
                   )
                 else:
-                  # Grand Total Column gets yellow fill
                   if c_idx == len(row_vals):
                     cell.fill = yellow_fill
                     cell.font = black_bold_font
@@ -1060,15 +778,9 @@ if uploaded_file is not None:
                   )
 
             for col in ws.columns:
-              max_len = max(
-                  len(str(cell.value or "")) for cell in col
-              )
-              col_letter = openpyxl.utils.get_column_letter(
-                  col[0].column
-              )
-              ws.column_dimensions[col_letter].width = max(
-                  max_len + 4, 12
-              )
+              max_len = max(len(str(cell.value or "")) for cell in col)
+              col_letter = openpyxl.utils.get_column_letter(col[0].column)
+              ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
             wb.save(output)
             return output.getvalue()
@@ -1153,6 +865,6 @@ if uploaded_file is not None:
 
 else:
   st.info(
-      "👈 कृपया डाव्या बाजूच्या Sidebar मधून E-Mojani ची Excel (.xlsx) फाईल Upload"
-      " करा."
+      "👈 कृपया डाव्या बाजूच्या Sidebar मधून E-Mojani ची Excel (.xlsx) फाईल/फाईल्स"
+      " Upload करा."
   )
