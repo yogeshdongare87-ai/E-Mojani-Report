@@ -486,14 +486,15 @@ if uploaded_file is not None:
                 cols_in_pivot = [m for m in sorted_month_names if m in pivot_r4.columns]
                 pivot_r4 = pivot_r4[cols_in_pivot]
 
+                # Master Excel me jo spelling hain unke sath match kiya gaya hai
                 standard_talukas = [
                     "अंजनगाव",
-                    "अचलपूर",
+                    "अचलपुर",
                     "अमरावती",
                     "चांदुर बा.",
                     "चिखलदरा",
                     "तिवसा",
-                    "दर्यापूर",
+                    "दर्यापुर",
                     "धामणगाव",
                     "धारणी",
                     "नांदगाव",
@@ -501,6 +502,12 @@ if uploaded_file is not None:
                     "मोर्शी",
                     "वरुड",
                 ]
+
+                # Dynamically include any extra taluka if present in data
+                present_talukas = pivot_r4.index.tolist()
+                for t in present_talukas:
+                    if t not in standard_talukas:
+                        standard_talukas.append(t)
 
                 pivot_r4 = pivot_r4.reindex(standard_talukas, fill_value=0)
                 pivot_r4["Grand Total"] = pivot_r4.sum(axis=1)
