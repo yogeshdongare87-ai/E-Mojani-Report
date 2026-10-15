@@ -37,7 +37,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("📊 भूमि अभिलेख विभाग - प्रलंबित मोजणी अहवाल व डैशबोर्ड")
+st.title("📊 भूमि अभिलेख विभाग - अमरावती | प्रलंबित मोजणी अहवाल व डॅशबोर्ड")
 
 
 # Excel Download Helper
@@ -48,9 +48,10 @@ def convert_df_to_excel(df, sheet_name="Report"):
     return output.getvalue()
 
 
-# PDF / Print Layout Generator
-def generate_report_pdf_html(df, title="अहवाल"):
+# Professional PDF / Print Layout Generator with Department Header & Current Date
+def generate_report_pdf_html(df, subtitle_text=""):
     headers = list(df.columns)
+    current_date_str = datetime.date.today().strftime("%d/%m/%Y")
 
     html = f"""
     <!DOCTYPE html>
@@ -67,38 +68,45 @@ def generate_report_pdf_html(df, title="अहवाल"):
                 margin: 0;
                 padding: 10px;
                 background-color: #ffffff;
-            }}
-            .report-title {{
                 text-align: center;
-                font-size: 22px;
+            }}
+            .dept-title {{
+                font-size: 20px;
                 font-weight: bold;
                 color: #000000;
-                margin-bottom: 15px;
+                margin-bottom: 5px;
+            }}
+            .report-title {{
+                font-size: 16px;
+                font-weight: bold;
+                color: #1F4E78;
+                margin-bottom: 20px;
             }}
             table {{
                 width: 100%;
                 border-collapse: collapse;
                 border: 1.5px solid #000000;
+                margin-top: 10px;
             }}
             th {{
                 background-color: #1F4E78;
                 color: #ffffff;
                 font-weight: bold;
-                font-size: 14px;
-                padding: 10px 8px;
+                font-size: 13px;
+                padding: 10px 6px;
                 border: 1px solid #000000;
                 text-align: center;
             }}
             td {{
-                padding: 7px 10px;
-                font-size: 13px;
+                padding: 7px 8px;
+                font-size: 12px;
                 border: 1px solid #000000;
                 text-align: center;
                 color: #000000;
             }}
             .taluka-col {{
                 text-align: left !important;
-                padding-left: 12px !important;
+                padding-left: 10px !important;
                 font-weight: 500;
             }}
             .total-row td {{
@@ -112,7 +120,8 @@ def generate_report_pdf_html(df, title="अहवाल"):
         </style>
     </head>
     <body>
-        <div class="report-title">{title}</div>
+        <div class="dept-title">भूमि अभिलेख विभाग - अमरावती</div>
+        <div class="report-title">{subtitle_text} ( दिनांक {current_date_str} )</div>
         <table>
             <thead>
                 <tr>
@@ -172,7 +181,7 @@ def generate_report_pdf_html(df, title="अहवाल"):
 st.sidebar.header("⚙️ File Upload & Options")
 
 uploaded_file = st.sidebar.file_uploader(
-    "📁 Main E-Mojani Raw Excel (.xlsx) [All Reports 1, 2, 3, 4, 5 साठी]",
+    "📁 Main E-Mojani Raw Excel (.xlsx) [All Reports 1 to 5]",
     type=["xlsx"],
     key="single_file",
 )
@@ -218,7 +227,7 @@ if uploaded_file is not None:
 
     df_raw["mojni_date_parsed"] = df_raw[col_mojni_date].apply(parse_excel_date)
 
-    # 'क प्रत निकाली दिनाक' parsing if available
+    # 'क प्रत निकाली दिनाक' parsing (Column 13 / Index 13)
     col_k_prat_date = "क प्रत निकाली दिनाक"
     if col_k_prat_date in df_raw.columns:
         df_raw["k_prat_date_parsed"] = df_raw[col_k_prat_date].apply(
@@ -344,27 +353,17 @@ if uploaded_file is not None:
                     label="📥 Download Report 1 (Excel)",
                     data=excel_r1,
                     file_name="Report_1_Talukani_hay.xlsx",
-                    mime=(
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    ),
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
             with btn_col2:
                 pdf_r1 = generate_report_pdf_html(
-                    pivot_df, title="Report 1 - तालुका व दिवसनिहाय"
+                    pivot_df, subtitle_text="तालुका व दिवसनिहाय प्रलंबित मोजणी प्रकरणे अहवाल"
                 )
                 st.download_button(
                     label="📄 Download Report 1 (PDF / Print)",
                     data=pdf_r1,
-                    file_name=(
-                        "Report_1.pdf"
-                        if WEASYPRINT_AVAILABLE
-                        else "Report_1.html"
-                    ),
-                    mime=(
-                        "application/pdf"
-                        if WEASYPRINT_AVAILABLE
-                        else "text/html"
-                    ),
+                    file_name="Report_1.pdf" if WEASYPRINT_AVAILABLE else "Report_1.html",
+                    mime="application/pdf" if WEASYPRINT_AVAILABLE else "text/html",
                 )
 
         # TAB 2: REPORT 2
@@ -496,27 +495,17 @@ if uploaded_file is not None:
                     label="📥 Download Report 2 (Excel)",
                     data=excel_r2,
                     file_name="Report_2_Stage_Officer.xlsx",
-                    mime=(
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    ),
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
             with btn_r2_2:
                 pdf_r2 = generate_report_pdf_html(
-                    df_rep2, title="Report 2 - टप्पा व अधिकारी निहाय"
+                    df_rep2, subtitle_text="टप्पा व अधिकारी निहाय प्रलंबित मोजणी प्रकरणे अहवाल"
                 )
                 st.download_button(
                     label="📄 Download Report 2 (PDF / Print)",
                     data=pdf_r2,
-                    file_name=(
-                        "Report_2.pdf"
-                        if WEASYPRINT_AVAILABLE
-                        else "Report_2.html"
-                    ),
-                    mime=(
-                        "application/pdf"
-                        if WEASYPRINT_AVAILABLE
-                        else "text/html"
-                    ),
+                    file_name="Report_2.pdf" if WEASYPRINT_AVAILABLE else "Report_2.html",
+                    mime="application/pdf" if WEASYPRINT_AVAILABLE else "text/html",
                 )
 
         # TAB 3: EXECUTIVE DASHBOARD
@@ -649,27 +638,17 @@ if uploaded_file is not None:
                             label="📥 Download Report 3 (Excel)",
                             data=excel_r3,
                             file_name="Report_3_Bhukarmapak.xlsx",
-                            mime=(
-                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                            ),
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         )
                     with btn_r3_2:
                         pdf_r3 = generate_report_pdf_html(
-                            pivot_r3, title="Report 3 - भूकरमापक निहाय"
+                            pivot_r3, subtitle_text="भूकरमापक निहाय व दिवसनिहाय प्रलंबित मोजणी प्रकरणे अहवाल"
                         )
                         st.download_button(
                             label="📄 Download Report 3 (PDF / Print)",
                             data=pdf_r3,
-                            file_name=(
-                                "Report_3.pdf"
-                                if WEASYPRINT_AVAILABLE
-                                else "Report_3.html"
-                            ),
-                            mime=(
-                                "application/pdf"
-                                if WEASYPRINT_AVAILABLE
-                                else "text/html"
-                            ),
+                            file_name="Report_3.pdf" if WEASYPRINT_AVAILABLE else "Report_3.html",
+                            mime="application/pdf" if WEASYPRINT_AVAILABLE else "text/html",
                         )
 
         # TAB 5: REPORT 4 (मोजणी होणेवर शिल्लक)
@@ -771,13 +750,11 @@ if uploaded_file is not None:
                         label="📥 Download Report 4 (Excel)",
                         data=excel_r4,
                         file_name="Report_4_Mojni_Shillak.xlsx",
-                        mime=(
-                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        ),
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
                 with btn_r4_2:
                     pdf_r4 = generate_report_pdf_html(
-                        pivot_r4, title="मोजणी होणेवर शिल्लक"
+                        pivot_r4, subtitle_text="मोजणी होणेवर शिल्लक प्रकरणांचा अहवाल"
                     )
                     st.download_button(
                         label="📄 Download Report 4 (PDF / Print Layout)",
@@ -808,16 +785,17 @@ if uploaded_file is not None:
                 (df_raw["k_prat_date_parsed"].notna())
                 & (df_raw["k_prat_date_parsed"] >= three_months_ago_r5)
                 & (df_raw["k_prat_date_parsed"] <= today_ref_r5)
+                & (df_raw[col_status].astype(str).str.strip() == "क प्रत")
             ].copy()
 
             st.success(
-                f"🎯 **मागील ३ महिन्यात पूर्ण झालेली एकूण 'क प्रत' प्रकरणे:"
-                f" {len(df_r5)}**"
+                f"🎯 **मागील ३ महिन्यात पूर्ण झालेली 'क प्रत' प्रकरणे"
+                f" (अचूक काउंट): {len(df_r5)}**"
             )
 
             if df_r5.empty:
                 st.warning(
-                    "मागील ३ महिन्यात 'क प्रत' दिनांक असलेले प्रकरणे आढळली"
+                    "मागील ३ महिन्यात 'क प्रत' स्थितीत असलेली प्रकरणे आढळली"
                     " नाहीत."
                 )
             else:
@@ -902,14 +880,12 @@ if uploaded_file is not None:
                         label="📥 Download Report 5 (Excel)",
                         data=excel_r5,
                         file_name="Report_5_K_Prat_Progress.xlsx",
-                        mime=(
-                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        ),
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
                 with btn_r5_2:
                     pdf_r5 = generate_report_pdf_html(
                         pivot_r5,
-                        title="मागील ३ महिने 'क प्रत' प्रोग्रेस अहवाल",
+                        subtitle_text="मागील ३ महिन्यांचा 'क प्रत' प्रोग्रेस अहवाल",
                     )
                     st.download_button(
                         label="📄 Download Report 5 (PDF / Print Layout)",
