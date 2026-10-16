@@ -300,10 +300,10 @@ def generate_report_pdf_html(df, subtitle_text=""):
 
   if is_multi_index:
     for idx_name in df.index.names:
-      width = "18%" if idx_name == "तालुका" else "26%"
+      width = "25%" if idx_name == "तालुका" else "35%"
       html += f'<th style="width: {width};">{idx_name}</th>'
   else:
-    html += '<th style="width: 22%;">तालुका</th>'
+    html += '<th style="width: 25%;">तालुका</th>'
 
   for h in headers:
     html += f"<th>{h}</th>"
@@ -460,13 +460,14 @@ if uploaded_file is not None:
   )
 
   with st.spinner("डेटा प्रोसेस होत आहे... कृपया वाट पहा..."):
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📊 Report 1 (तालुका व दिवसनिहाय)",
         "📋 Report 2 (टप्पा व अधिकारी निहाय)",
         "📈 Executive Dashboard",
         "📋 Report 3 (भूकरमापक निहाय)",
         "📅 Report 4 (मोजणी होणेवर शिल्लक)",
         "🚀 Report 5 (मागील ३ महिने क प्रत)",
+        "⚠️ Report 6 (भूकरमापक १०+ प्रलंबित)",
     ])
 
     from_str = start_date.strftime("%d/%m/%Y")
@@ -810,6 +811,18 @@ if uploaded_file is not None:
       total_row_r5 = pivot_r5.sum(axis=0)
       pivot_r5.loc["Total"] = total_row_r5
 
+    # --- REPORT 6 GENERATION (BHUKARMAPAK 10+ PENDING CASES) ---
+    df_r6 = pd.DataFrame()
+    if not pivot_r3.empty:
+      df_r6_temp = pivot_r3.reset_index()
+      # Exclude Grand Total row from pivot_r3
+      df_r6_temp = df_r6_temp[df_r6_temp["तालुका"] != "Grand Total"].copy()
+      if "Grand Total" in df_r6_temp.columns:
+        df_r6_temp = df_r6_temp[df_r6_temp["Grand Total"] >= 10].copy()
+        df_r6 = df_r6_temp[["तालुका", surveyor_col_r3, "Grand Total"]].set_index(
+            ["तालुका", surveyor_col_r3]
+        )
+
     # SIDEBAR: MASTER ALL-IN-ONE EXCEL EXPORT BUTTON
     st.sidebar.markdown("---")
     st.sidebar.subheader("📦 Master Single Excel Download")
@@ -829,12 +842,16 @@ if uploaded_file is not None:
         ),
         "Report_4": (final_r4_df, "मोजणी होणेवर शिल्लक प्रकरणांचा अहवाल"),
         "Report_5": (pivot_r5, "मागील ३ महिने 'क प्रत' प्रोग्रेस अहवाल"),
+        "Report_6": (
+            df_r6,
+            "भूकरमापक प्रलंबित मोजणी १० पेक्षा जास्त प्रकरणे अहवाल",
+        ),
     }
 
     master_excel_bytes = convert_all_reports_to_single_excel(all_reports_dict)
 
     st.sidebar.download_button(
-        label="📊 Download All 5 Reports in 1 Excel",
+        label="📊 Download All Reports in 1 Excel",
         data=master_excel_bytes,
         file_name=f"All_Mojni_Reports_{today_file_str}.xlsx",
         mime=(
@@ -1050,6 +1067,49 @@ if uploaded_file is not None:
               file_name=f"Report_5_K_Prat_Progress_{today_file_str}.pdf",
               mime="application/pdf" if WEASYPRINT_AVAILABLE else "text/html",
           )
+
+    # TAB 7: REPORT 6
+    with tab7:
+      st.markdown(
+          "## ⚠️ रिपोर्ट ६: भूकरमापक प्रलंबित मोजणी १० पेक्षा जास्त प्रकरणे"
+          " अहवाल"
+      )
+      if not df_r6.empty:
+        st.warning(
+            f"⚠️ **१० पेक्षा जास्त प्रलंबित प्रकरणे असलेल्या भूकरमापकांची संख्या:"
+            f" {len(df_r6)}**"
+        )
+        st.dataframe(df_r6, use_container_width=True)
+
+        btn_r6_1, btn_r6_2 = st.columns(2)
+        with btn_r6_1:
+          excel_r6 = convert_df_to_excel(
+              df_r6,
+              report_title=(
+                  "भूकरमापक प्रलंबित मोजणी १० पेक्षा जास्त प्रकरणे अहवाल"
+              ),
+          )
+          st.download_button(
+              label="📥 Download Report 6 (Excel)",
+              data=excel_r6,
+              file_name=f"Report_6_Bhukarmapak_10plus_{today_file_str}.xlsx",
+              mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          )
+        with btn_r6_2:
+          pdf_r6 = generate_report_pdf_html(
+              df_r6,
+              subtitle_text=(
+                  "भूकरमापक प्रलंबित मोजणी १० पेक्षा जास्त प्रकरणे अहवाल"
+              ),
+          )
+          st.download_button(
+              label="📄 Download Report 6 (PDF / Print)",
+              data=pdf_r6,
+              file_name=f"Report_6_Bhukarmapak_10plus_{today_file_str}.pdf",
+              mime="application/pdf" if WEASYPRINT_AVAILABLE else "text/html",
+          )
+      else:
+        st.success("✅ १० पेक्षा जास्त प्रलंबित प्रकरणे असलेला कोणताही भूकरमापक नाही.")
 
 else:
   st.info("👈 कृपया डाव्या बाजूने Excel फाईल Upload करा.")
