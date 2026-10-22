@@ -383,6 +383,22 @@ if uploaded_file is not None:
   else:
     df_raw["k_prat_date_parsed"] = df_raw["mojni_date_parsed"]
 
+  # Parse Application Accept Date
+  col_app_accept_date_raw = next(
+      (
+          c
+          for c in ["अर्ज स्वीकृत दिनांक", "स्वीकृत दिनांक"]
+          if c in df_raw.columns
+      ),
+      None,
+  )
+  if col_app_accept_date_raw:
+    df_raw["app_accept_date_parsed"] = df_raw[col_app_accept_date_raw].apply(
+        parse_excel_date
+    )
+  else:
+    df_raw["app_accept_date_parsed"] = df_raw["mojni_date_parsed"]
+
   min_excel_date = df_raw["mojni_date_parsed"].min()
   max_excel_date = df_raw["mojni_date_parsed"].max()
 
@@ -786,8 +802,17 @@ if uploaded_file is not None:
             ["तालुका", surveyor_col_r3]
         )
 
-    # --- REPORT 7 GENERATION (INDIVIDUAL PENDING CASES LIST) ---
-    df_r7 = df_raw[df_raw[col_status].isin(selected_statuses)].copy()
+    # --- REPORT 7 GENERATION (4 SPECIFIC STATUSES & ACC DATE TO MOJNI DATE DAYS) ---
+    r7_target_statuses = [
+        "ऊप.अ. भू. अ/ न .भू अ यांच्या मान्यतेवर",
+        "छाननी लिपिक यांनी तपासले",
+        "शिरस्तेदार/मुख्यालय सहाय्यक यांनी तपासले",
+        "मोजणीची माहिती",
+    ]
+
+    df_r7 = df_raw[
+        df_raw[col_status].astype(str).str.strip().isin(r7_target_statuses)
+    ].copy()
 
     col_app_no = next(
         (c for c in ["अर्ज क्र.(Application No)", "अर्ज क्र."] if c in df_r7.columns),
@@ -799,23 +824,17 @@ if uploaded_file is not None:
     col_village = next(
         (c for c in ["गाव", "Village"] if c in df_r7.columns), None
     )
-    col_app_accept_date = next(
-        (
-            c
-            for c in ["अर्ज स्वीकृत दिनांक", "स्वीकृत दिनांक"]
-            if c in df_r7.columns
-        ),
-        None,
-    )
 
-    today_dt_curr = pd.to_datetime(datetime.date.today())
-    df_r7["दिवस"] = (today_dt_curr - df_r7["mojni_date_parsed"]).dt.days
+    # Calculate Days: Mojni Date - Application Accept Date
+    df_r7["दिवस"] = (
+        df_r7["mojni_date_parsed"] - df_r7["app_accept_date_parsed"]
+    ).dt.days
 
     def r7_kalavadhi(days):
-      if pd.isna(days):
+      if pd.isna(days) or days < 0:
         return "-"
       elif days <= 15:
-        return "0-15"
+        return "15-30" if days > 15 else "0-15"
       elif days <= 30:
         return "15-30"
       elif days <= 60:
@@ -829,21 +848,29 @@ if uploaded_file is not None:
 
     df_r7["कालावधी"] = df_r7["दिवस"].apply(r7_kalavadhi)
 
+    # Format dates to string
+    df_r7["मोजणी तारीख प्रदर्शित"] = df_r7["mojni_date_parsed"].dt.strftime(
+        "%d-%m-%Y"
+    )
+    df_r7["अर्ज स्वीकृत दिनांक प्रदर्शित"] = df_r7[
+        "app_accept_date_parsed"
+    ].dt.strftime("%d-%m-%Y")
+
     r7_cols_map = {}
     r7_cols_map[col_app_no] = "अर्ज क्र.(Application No)"
     if col_dist:
       r7_cols_map[col_dist] = "जिल्हा"
     else:
       df_r7["जिल्हा"] = "अमरावती"
+      r7_cols_map["जिल्हा"] = "जिल्हा"
     r7_cols_map["तालुका"] = "तालुका"
     if col_village:
       r7_cols_map[col_village] = "गाव"
     if surveyor_col_r3:
       r7_cols_map[surveyor_col_r3] = "भूकरमापक"
     r7_cols_map[col_status] = "स्थिती"
-    r7_cols_map[col_mojni_date] = "मोजणी तारीख"
-    if col_app_accept_date:
-      r7_cols_map[col_app_accept_date] = "अर्ज स्वीकृत दिनांक"
+    r7_cols_map["मोजणी तारीख प्रदर्शित"] = "मोजणी तारीख"
+    r7_cols_map["अर्ज स्वीकृत दिनांक प्रदर्शित"] = "अर्ज स्वीकृत दिनांक"
     r7_cols_map["दिवस"] = "दिवस"
     r7_cols_map["कालावधी"] = "कालावधी"
 
