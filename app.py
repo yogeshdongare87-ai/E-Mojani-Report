@@ -42,14 +42,16 @@ st.markdown(
 st.title("📊 भूमि अभिलेख विभाग - अमरावती | प्रलंबित मोजणी अहवाल व डॅशबोर्ड")
 
 
-# EXCEL HELPER FOR INDIVIDUAL SHEETS (WITH TITLE HEADER)
-def convert_df_to_excel(df, report_title="प्रलंबित मोजणी अहवाल"):
+# EXCEL HELPER FOR INDIVIDUAL SHEETS (FIXED INDEX / TALUKA COLUMN ISSUE)
+def convert_df_to_excel(df_input, report_title="प्रलंबित मोजणी अहवाल"):
   output = io.BytesIO()
   current_date_str = datetime.date.today().strftime("%d/%m/%Y")
 
   wb = openpyxl.Workbook()
   ws = wb.active
   ws.title = "Report"
+
+  df = df_input.reset_index() if df_input.index.name is not None else df_input
 
   font_dept = Font(name="Calibri", size=14, bold=True, color="1F4E78")
   font_sub = Font(name="Calibri", size=11, bold=True, color="000000")
@@ -65,9 +67,7 @@ def convert_df_to_excel(df, report_title="प्रलंबित मोजण�
       bottom=Side(style="thin", color="CCCCCC"),
   )
 
-  is_multi = isinstance(df.index, pd.MultiIndex)
-  num_idx_cols = len(df.index.names) if is_multi else 0
-  total_cols = num_idx_cols + len(df.columns)
+  total_cols = len(df.columns)
 
   # Row 1: Department Title
   ws.merge_cells(
@@ -89,29 +89,14 @@ def convert_df_to_excel(df, report_title="प्रलंबित मोजण�
 
   # Table Headers
   start_row = 4
-  col_offset = 1
-
-  if is_multi:
-    for i, idx_name in enumerate(df.index.names):
-      cell = ws.cell(row=start_row, column=i + 1, value=idx_name or "")
-      cell.font, cell.fill = font_th, fill_th
-      cell.alignment = Alignment(horizontal="center", vertical="center")
-    col_offset = num_idx_cols + 1
-
   for j, col_name in enumerate(df.columns):
-    cell = ws.cell(row=start_row, column=col_offset + j, value=str(col_name))
+    cell = ws.cell(row=start_row, column=j + 1, value=str(col_name))
     cell.font, cell.fill = font_th, fill_th
     cell.alignment = Alignment(horizontal="center", vertical="center")
 
   # Rows Data
   current_r = start_row + 1
   for idx_val, row in df.iterrows():
-    if is_multi:
-      for k, val in enumerate(idx_val):
-        cell = ws.cell(row=current_r, column=k + 1, value=str(val))
-        cell.alignment = Alignment(horizontal="left", vertical="center")
-        cell.border = thin_border
-
     for j, col_name in enumerate(df.columns):
       val = row[col_name]
       val_clean = (
@@ -123,10 +108,11 @@ def convert_df_to_excel(df, report_title="प्रलंबित मोजण�
           )
           else (int(val) if isinstance(val, (int, float)) else val)
       )
-      cell = ws.cell(row=current_r, column=col_offset + j, value=val_clean)
-      cell.alignment = Alignment(horizontal="center", vertical="center")
+      cell = ws.cell(row=current_r, column=j + 1, value=val_clean)
+      cell.alignment = Alignment(
+          horizontal="left" if j <= 1 else "center", vertical="center"
+      )
       cell.border = thin_border
-
     current_r += 1
 
   # Auto Column Width
@@ -160,12 +146,14 @@ def convert_all_reports_to_single_excel(df_dict):
       bottom=Side(style="thin", color="CCCCCC"),
   )
 
-  for sheet_name, (df_data, report_title) in df_dict.items():
+  for sheet_name, (df_input, report_title) in df_dict.items():
     ws = wb.create_sheet(title=sheet_name[:31])
-
-    is_multi = isinstance(df_data.index, pd.MultiIndex)
-    num_idx_cols = len(df_data.index.names) if is_multi else 0
-    total_cols = num_idx_cols + len(df_data.columns)
+    df_data = (
+        df_input.reset_index()
+        if df_input.index.name is not None
+        else df_input
+    )
+    total_cols = len(df_data.columns)
 
     # Title Headers
     ws.merge_cells(
@@ -187,28 +175,13 @@ def convert_all_reports_to_single_excel(df_dict):
     )
 
     start_row = 4
-    col_offset = 1
-
-    if is_multi:
-      for i, idx_name in enumerate(df_data.index.names):
-        cell = ws.cell(row=start_row, column=i + 1, value=idx_name or "")
-        cell.font, cell.fill = font_th, fill_th
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-      col_offset = num_idx_cols + 1
-
     for j, col_name in enumerate(df_data.columns):
-      cell = ws.cell(row=start_row, column=col_offset + j, value=str(col_name))
+      cell = ws.cell(row=start_row, column=j + 1, value=str(col_name))
       cell.font, cell.fill = font_th, fill_th
       cell.alignment = Alignment(horizontal="center", vertical="center")
 
     current_r = start_row + 1
     for idx_val, row in df_data.iterrows():
-      if is_multi:
-        for k, val in enumerate(idx_val):
-          cell = ws.cell(row=current_r, column=k + 1, value=str(val))
-          cell.alignment = Alignment(horizontal="left", vertical="center")
-          cell.border = thin_border
-
       for j, col_name in enumerate(df_data.columns):
         val = row[col_name]
         val_clean = (
@@ -220,10 +193,11 @@ def convert_all_reports_to_single_excel(df_dict):
             )
             else (int(val) if isinstance(val, (int, float)) else val)
         )
-        cell = ws.cell(row=current_r, column=col_offset + j, value=val_clean)
-        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell = ws.cell(row=current_r, column=j + 1, value=val_clean)
+        cell.alignment = Alignment(
+            horizontal="left" if j <= 1 else "center", vertical="center"
+        )
         cell.border = thin_border
-
       current_r += 1
 
     for col in ws.columns:
@@ -235,11 +209,11 @@ def convert_all_reports_to_single_excel(df_dict):
   return output.getvalue()
 
 
-# PROFESSIONAL & CLEAN PDF GENERATOR FOR ALL REPORTS
-def generate_report_pdf_html(df, subtitle_text=""):
+# PROFESSIONAL PDF GENERATOR FOR ALL REPORTS
+def generate_report_pdf_html(df_input, subtitle_text=""):
+  df = df_input.reset_index() if df_input.index.name is not None else df_input
   headers = list(df.columns)
   current_date_str = datetime.date.today().strftime("%d/%m/%Y")
-  is_multi_index = isinstance(df.index, pd.MultiIndex)
 
   html = f"""
     <!DOCTYPE html>
@@ -272,10 +246,6 @@ def generate_report_pdf_html(df, subtitle_text=""):
                 <tr>
     """
 
-  if is_multi_index:
-    for idx_name in df.index.names:
-      html += f"<th>{idx_name}</th>"
-
   for h in headers:
     html += f"<th>{h}</th>"
 
@@ -286,7 +256,7 @@ def generate_report_pdf_html(df, subtitle_text=""):
     """
 
   for idx, row in df.iterrows():
-    idx_str = str(idx)
+    idx_str = str(row.iloc[0])
     is_total = (
         "Total" in idx_str or "एकूण" in idx_str or "Grand Total" in idx_str
     )
@@ -294,11 +264,7 @@ def generate_report_pdf_html(df, subtitle_text=""):
 
     html += f'<tr class="{row_class}">'
 
-    if is_multi_index:
-      for idx_item in idx:
-        html += f'<td class="text-col">{idx_item}</td>'
-
-    for col_name in headers:
+    for col_idx, col_name in enumerate(headers):
       val = row[col_name]
       val_str = (
           ""
@@ -309,7 +275,8 @@ def generate_report_pdf_html(df, subtitle_text=""):
           )
           else str(int(val) if isinstance(val, (int, float)) else val)
       )
-      html += f"<td>{val_str}</td>"
+      align_class = 'class="text-col"' if col_idx == 0 else ""
+      html += f"<td {align_class}>{val_str}</td>"
 
     html += "</tr>"
 
@@ -383,7 +350,6 @@ if uploaded_file is not None:
   else:
     df_raw["k_prat_date_parsed"] = df_raw["mojni_date_parsed"]
 
-  # Parse Application Accept Date
   col_app_accept_date_raw = next(
       (
           c
@@ -450,10 +416,7 @@ if uploaded_file is not None:
         "📑 Report 7 (वैयक्तिक यादी)",
     ])
 
-    from_str = start_date.strftime("%d/%m/%Y")
-    to_str = end_date.strftime("%d/%m/%Y")
-
-    # --- REPORT 1 GENERATION ---
+    # --- REPORT 1 GENERATION (UPDATED BUCKETS INCLUDING 180, 365 DAYS) ---
     df1 = df_raw[df_raw[col_status].isin(selected_statuses)].copy()
     start_dt, end_dt = pd.to_datetime(start_date), pd.to_datetime(end_date)
     df1 = df1[
@@ -462,7 +425,7 @@ if uploaded_file is not None:
     ].copy()
     df1["Pending Days"] = (end_dt - df1["mojni_date_parsed"]).dt.days
 
-    def day_bucket(days):
+    def day_bucket_extended(days):
       if pd.isna(days):
         return "तारीख उपलब्ध नाही"
       if days <= 15:
@@ -473,26 +436,33 @@ if uploaded_file is not None:
         return "60 दिवस वर"
       elif days <= 90:
         return "90 दिवस वर"
+      elif days <= 180:
+        return "180 दिवस वर"
+      elif days <= 365:
+        return "365 दिवस वर"
       else:
-        return "90 दिवसांपेक्षा जास्त"
+        return "365 दिवसांपेक्षा जास्त"
 
-    df1["दिवस वर"] = df1["Pending Days"].apply(day_bucket)
-    bucket_order = [
+    df1["दिवस वर"] = df1["Pending Days"].apply(day_bucket_extended)
+    bucket_order_ext = [
         "15 दिवस वर",
         "30 दिवस वर",
         "60 दिवस वर",
         "90 दिवस वर",
-        "90 दिवसांपेक्षा जास्त",
+        "180 दिवस वर",
+        "365 दिवस वर",
+        "365 दिवसांपेक्षा जास्त",
     ]
     pivot_df = pd.crosstab(
         df1["तालुका"], df1["दिवस वर"], margins=True, margins_name="एकूण"
     )
-    existing_cols = [c for c in bucket_order if c in pivot_df.columns]
+    existing_cols = [c for c in bucket_order_ext if c in pivot_df.columns]
     if "तारीख उपलब्ध नाही" in pivot_df.columns:
       existing_cols.append("तारीख उपलब्ध नाही")
     if "एकूण" in pivot_df.columns:
       existing_cols.append("एकूण")
     pivot_df = pivot_df[existing_cols]
+    pivot_df.index.name = "तालुका"
 
     # --- REPORT 2 GENERATION ---
     r2_start_dt, r2_end_dt = pd.to_datetime(min_excel_date), pd.to_datetime(
@@ -727,6 +697,7 @@ if uploaded_file is not None:
           [district_total], index=["अमरावती (जिल्हा एकूण)"]
       )
       final_r4_df = pd.concat([df_district_row, pivot_r4])
+      final_r4_df.index.name = "तालुका"
 
     # --- REPORT 5 GENERATION ---
     today_ref_r5 = pd.to_datetime(datetime.date.today())
@@ -790,6 +761,7 @@ if uploaded_file is not None:
 
       total_row_r5 = pivot_r5.sum(axis=0)
       pivot_r5.loc["Total"] = total_row_r5
+      pivot_r5.index.name = "तालुका"
 
     # --- REPORT 6 GENERATION ---
     df_r6 = pd.DataFrame()
@@ -802,7 +774,7 @@ if uploaded_file is not None:
             ["तालुका", surveyor_col_r3]
         )
 
-    # --- REPORT 7 GENERATION (4 SPECIFIC STATUSES & ACC DATE TO MOJNI DATE DAYS) ---
+    # --- REPORT 7 GENERATION ---
     r7_target_statuses = [
         "ऊप.अ. भू. अ/ न .भू अ यांच्या मान्यतेवर",
         "छाननी लिपिक यांनी तपासले",
@@ -825,7 +797,6 @@ if uploaded_file is not None:
         (c for c in ["गाव", "Village"] if c in df_r7.columns), None
     )
 
-    # Calculate Days: Mojni Date - Application Accept Date
     df_r7["दिवस"] = (
         df_r7["mojni_date_parsed"] - df_r7["app_accept_date_parsed"]
     ).dt.days
@@ -834,7 +805,7 @@ if uploaded_file is not None:
       if pd.isna(days) or days < 0:
         return "-"
       elif days <= 15:
-        return "15-30" if days > 15 else "0-15"
+        return "0-15"
       elif days <= 30:
         return "15-30"
       elif days <= 60:
@@ -848,7 +819,6 @@ if uploaded_file is not None:
 
     df_r7["कालावधी"] = df_r7["दिवस"].apply(r7_kalavadhi)
 
-    # Format dates to string
     df_r7["मोजणी तारीख प्रदर्शित"] = df_r7["mojni_date_parsed"].dt.strftime(
         "%d-%m-%Y"
     )
@@ -1113,92 +1083,4 @@ if uploaded_file is not None:
           pdf_r5 = generate_report_pdf_html(
               pivot_r5, subtitle_text="मागील ३ महिने 'क प्रत' प्रोग्रेस अहवाल"
           )
-          st.download_button(
-              label="📄 Download Report 5 (PDF / Print)",
-              data=pdf_r5,
-              file_name=f"Report_5_K_Prat_Progress_{today_file_str}.pdf",
-              mime="application/pdf" if WEASYPRINT_AVAILABLE else "text/html",
-          )
-
-    with tab7:
-      st.markdown(
-          "## ⚠️ रिपोर्ट ६: भूकरमापक प्रलंबित मोजणी १० पेक्षा जास्त प्रकरणे"
-          " अहवाल"
-      )
-      if not df_r6.empty:
-        st.warning(
-            f"⚠️ **१० पेक्षा जास्त प्रलंबित प्रकरणे असलेल्या भूकरमापकांची संख्या:"
-            f" {len(df_r6)}**"
-        )
-        st.dataframe(df_r6, use_container_width=True)
-
-        btn_r6_1, btn_r6_2 = st.columns(2)
-        with btn_r6_1:
-          excel_r6 = convert_df_to_excel(
-              df_r6,
-              report_title=(
-                  "भूकरमापक प्रलंबित मोजणी १० पेक्षा जास्त प्रकरणे अहवाल"
-              ),
-          )
-          st.download_button(
-              label="📥 Download Report 6 (Excel)",
-              data=excel_r6,
-              file_name=f"Report_6_Bhukarmapak_10plus_{today_file_str}.xlsx",
-              mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          )
-        with btn_r6_2:
-          pdf_r6 = generate_report_pdf_html(
-              df_r6,
-              subtitle_text=(
-                  "भूकरमापक प्रलंबित मोजणी १० पेक्षा जास्त प्रकरणे अहवाल"
-              ),
-          )
-          st.download_button(
-              label="📄 Download Report 6 (PDF / Print)",
-              data=pdf_r6,
-              file_name=f"Report_6_Bhukarmapak_10plus_{today_file_str}.pdf",
-              mime="application/pdf" if WEASYPRINT_AVAILABLE else "text/html",
-          )
-
-    # TAB 8: REPORT 7
-    with tab8:
-      st.markdown(
-          "## 📑 रिपोर्ट ७: प्रलंबित प्रकरणांची वैयक्तिक यादी (जिल्हा ➔ तालुका"
-          " ➔ भूकरमापक)"
-      )
-      if not df_r7_display.empty:
-        st.info(f"📋 **एकूण वैयक्तिक प्रलंबित प्रकरणे: {len(df_r7_display)}**")
-        st.dataframe(df_r7_display, use_container_width=True)
-
-        btn_r7_1, btn_r7_2 = st.columns(2)
-        with btn_r7_1:
-          excel_r7 = convert_df_to_excel(
-              df_r7_display,
-              report_title=(
-                  "प्रलंबित प्रकरणांची वैयक्तिक यादी (जिल्हा ➔ तालुका ➔"
-                  " भूकरमापक) अहवाल"
-              ),
-          )
-          st.download_button(
-              label="📥 Download Report 7 (Excel)",
-              data=excel_r7,
-              file_name=f"Report_7_Vaiktik_Yadi_{today_file_str}.xlsx",
-              mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          )
-        with btn_r7_2:
-          pdf_r7 = generate_report_pdf_html(
-              df_r7_display,
-              subtitle_text=(
-                  "प्रलंबित प्रकरणांची वैयक्तिक यादी (जिल्हा ➔ तालुका ➔"
-                  " भूकरमापक) अहवाल"
-              ),
-          )
-          st.download_button(
-              label="📄 Download Report 7 (PDF / Print)",
-              data=pdf_r7,
-              file_name=f"Report_7_Vaiktik_Yadi_{today_file_str}.pdf",
-              mime="application/pdf" if WEASYPRINT_AVAILABLE else "text/html",
-          )
-
-else:
-  st.info("👈 कृपया डाव्या बाजूने Excel फाईल Upload करा.")
+          st.download_
