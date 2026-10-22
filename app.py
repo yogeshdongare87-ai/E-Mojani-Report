@@ -42,7 +42,74 @@ st.markdown(
 st.title("📊 भूमि अभिलेख विभाग - अमरावती | प्रलंबित मोजणी अहवाल व डॅशबोर्ड")
 
 
-# EXCEL HELPER FOR INDIVIDUAL SHEETS (FIXED INDEX / TALUKA COLUMN ISSUE)
+def parse_excel_date(val):
+  if pd.isna(val) or str(val).strip() in ["", "nan", "NaT"]:
+    return pd.NaT
+  try:
+    val_num = float(val)
+    return datetime.datetime(1899, 12, 30) + datetime.timedelta(days=val_num)
+  except Exception:
+    return pd.to_datetime(val, dayfirst=True, errors="coerce")
+
+
+# CACHED DATA LOAD TO SAVE MEMORY
+@st.cache_data(show_spinner="लोड होत आहे...")
+def load_and_preprocess_data(file_bytes):
+  df_raw = pd.read_excel(file_bytes)
+  if "मोजणी तारीख" not in df_raw.columns:
+    df_raw = pd.read_excel(file_bytes, header=1)
+
+  if "तालुका" in df_raw.columns:
+    df_raw["तालुका"] = df_raw["तालुका"].astype(str).str.strip()
+    df_raw = df_raw[
+        df_raw["तालुका"].notna()
+        & (~df_raw["तालुका"].isin(["", "nan", "None", "0"]))
+    ]
+
+  col_mojni_date = (
+      "मोजणी तारीख"
+      if "मोजणी तारीख" in df_raw.columns
+      else df_raw.columns[8]
+      if len(df_raw.columns) >= 9
+      else None
+  )
+  col_status = (
+      "स्थिती"
+      if "स्थिती" in df_raw.columns
+      else df_raw.columns[10]
+      if len(df_raw.columns) >= 11
+      else None
+  )
+
+  df_raw["mojni_date_parsed"] = df_raw[col_mojni_date].apply(parse_excel_date)
+
+  col_k_prat_date = "क प्रत निकाली दिनाक"
+  if col_k_prat_date in df_raw.columns:
+    df_raw["k_prat_date_parsed"] = df_raw[col_k_prat_date].apply(
+        parse_excel_date
+    )
+  else:
+    df_raw["k_prat_date_parsed"] = df_raw["mojni_date_parsed"]
+
+  col_app_accept_date_raw = next(
+      (
+          c
+          for c in ["अर्ज स्वीकृत दिनांक", "स्वीकृत दिनांक"]
+          if c in df_raw.columns
+      ),
+      None,
+  )
+  if col_app_accept_date_raw:
+    df_raw["app_accept_date_parsed"] = df_raw[col_app_accept_date_raw].apply(
+        parse_excel_date
+    )
+  else:
+    df_raw["app_accept_date_parsed"] = df_raw["mojni_date_parsed"]
+
+  return df_raw, col_mojni_date, col_status
+
+
+# EXCEL HELPER FOR INDIVIDUAL SHEETS
 def convert_df_to_excel(df_input, report_title="प्रलंबित मोजणी अहवाल"):
   output = io.BytesIO()
   current_date_str = datetime.date.today().strftime("%d/%m/%Y")
@@ -69,7 +136,6 @@ def convert_df_to_excel(df_input, report_title="प्रलंबित मो�
 
   total_cols = len(df.columns)
 
-  # Row 1: Department Title
   ws.merge_cells(
       start_row=1, start_column=1, end_row=1, end_column=max(total_cols, 2)
   )
@@ -77,7 +143,6 @@ def convert_df_to_excel(df_input, report_title="प्रलंबित मो�
   cell_dept.font = font_dept
   cell_dept.alignment = Alignment(horizontal="center", vertical="center")
 
-  # Row 2: Subtitle with Date
   ws.merge_cells(
       start_row=2, start_column=1, end_row=2, end_column=max(total_cols, 2)
   )
@@ -87,14 +152,12 @@ def convert_df_to_excel(df_input, report_title="प्रलंबित मो�
   cell_sub.font = font_sub
   cell_sub.alignment = Alignment(horizontal="center", vertical="center")
 
-  # Table Headers
   start_row = 4
   for j, col_name in enumerate(df.columns):
     cell = ws.cell(row=start_row, column=j + 1, value=str(col_name))
     cell.font, cell.fill = font_th, fill_th
     cell.alignment = Alignment(horizontal="center", vertical="center")
 
-  # Rows Data
   current_r = start_row + 1
   for idx_val, row in df.iterrows():
     for j, col_name in enumerate(df.columns):
@@ -115,7 +178,6 @@ def convert_df_to_excel(df_input, report_title="प्रलंबित मो�
       cell.border = thin_border
     current_r += 1
 
-  # Auto Column Width
   for col in ws.columns:
     max_len = max(len(str(cell.value or "")) for cell in col)
     col_letter = openpyxl.utils.get_column_letter(col[0].column)
@@ -125,7 +187,7 @@ def convert_df_to_excel(df_input, report_title="प्रलंबित मो�
   return output.getvalue()
 
 
-# MASTER EXCEL HELPER: COMBINES ALL REPORTS INTO SINGLE EXCEL
+# MASTER EXCEL HELPER
 def convert_all_reports_to_single_excel(df_dict):
   output = io.BytesIO()
   current_date_str = datetime.date.today().strftime("%d/%m/%Y")
@@ -155,7 +217,6 @@ def convert_all_reports_to_single_excel(df_dict):
     )
     total_cols = len(df_data.columns)
 
-    # Title Headers
     ws.merge_cells(
         start_row=1, start_column=1, end_row=1, end_column=max(total_cols, 2)
     )
@@ -209,7 +270,7 @@ def convert_all_reports_to_single_excel(df_dict):
   return output.getvalue()
 
 
-# PROFESSIONAL PDF GENERATOR FOR ALL REPORTS
+# PDF GENERATOR
 def generate_report_pdf_html(df_input, subtitle_text=""):
   df = df_input.reset_index() if df_input.index.name is not None else df_input
   headers = list(df.columns)
@@ -302,68 +363,8 @@ uploaded_file = st.sidebar.file_uploader(
     "📁 Main E-Mojani Raw Excel (.xlsx)", type=["xlsx"], key="single_file"
 )
 
-
-def parse_excel_date(val):
-  if pd.isna(val) or str(val).strip() in ["", "nan", "NaT"]:
-    return pd.NaT
-  try:
-    val_num = float(val)
-    return datetime.datetime(1899, 12, 30) + datetime.timedelta(days=val_num)
-  except Exception:
-    return pd.to_datetime(val, dayfirst=True, errors="coerce")
-
-
 if uploaded_file is not None:
-  df_raw = pd.read_excel(uploaded_file)
-  if "मोजणी तारीख" not in df_raw.columns:
-    df_raw = pd.read_excel(uploaded_file, header=1)
-
-  if "तालुका" in df_raw.columns:
-    df_raw["तालुका"] = df_raw["तालुका"].astype(str).str.strip()
-    df_raw = df_raw[
-        df_raw["तालुका"].notna()
-        & (~df_raw["तालुका"].isin(["", "nan", "None", "0"]))
-    ]
-
-  col_mojni_date = (
-      "मोजणी तारीख"
-      if "मोजणी तारीख" in df_raw.columns
-      else df_raw.columns[8]
-      if len(df_raw.columns) >= 9
-      else None
-  )
-  col_status = (
-      "स्थिती"
-      if "स्थिती" in df_raw.columns
-      else df_raw.columns[10]
-      if len(df_raw.columns) >= 11
-      else None
-  )
-
-  df_raw["mojni_date_parsed"] = df_raw[col_mojni_date].apply(parse_excel_date)
-
-  col_k_prat_date = "क प्रत निकाली दिनाक"
-  if col_k_prat_date in df_raw.columns:
-    df_raw["k_prat_date_parsed"] = df_raw[col_k_prat_date].apply(
-        parse_excel_date
-    )
-  else:
-    df_raw["k_prat_date_parsed"] = df_raw["mojni_date_parsed"]
-
-  col_app_accept_date_raw = next(
-      (
-          c
-          for c in ["अर्ज स्वीकृत दिनांक", "स्वीकृत दिनांक"]
-          if c in df_raw.columns
-      ),
-      None,
-  )
-  if col_app_accept_date_raw:
-    df_raw["app_accept_date_parsed"] = df_raw[col_app_accept_date_raw].apply(
-        parse_excel_date
-    )
-  else:
-    df_raw["app_accept_date_parsed"] = df_raw["mojni_date_parsed"]
+  df_raw, col_mojni_date, col_status = load_and_preprocess_data(uploaded_file)
 
   min_excel_date = df_raw["mojni_date_parsed"].min()
   max_excel_date = df_raw["mojni_date_parsed"].max()
