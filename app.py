@@ -416,7 +416,7 @@ if uploaded_file is not None:
         "📑 Report 7 (वैयक्तिक यादी)",
     ])
 
-    # --- REPORT 1 GENERATION (UPDATED BUCKETS INCLUDING 180, 365 DAYS) ---
+    # --- REPORT 1 GENERATION ---
     df1 = df_raw[df_raw[col_status].isin(selected_statuses)].copy()
     start_dt, end_dt = pd.to_datetime(start_date), pd.to_datetime(end_date)
     df1 = df1[
@@ -1083,4 +1083,91 @@ if uploaded_file is not None:
           pdf_r5 = generate_report_pdf_html(
               pivot_r5, subtitle_text="मागील ३ महिने 'क प्रत' प्रोग्रेस अहवाल"
           )
-          st.download_
+          st.download_button(
+              label="📄 Download Report 5 (PDF / Print)",
+              data=pdf_r5,
+              file_name=f"Report_5_K_Prat_Progress_{today_file_str}.pdf",
+              mime="application/pdf" if WEASYPRINT_AVAILABLE else "text/html",
+          )
+
+    with tab7:
+      st.markdown(
+          "## ⚠️ रिपोर्ट ६: भूकरमापक प्रलंबित मोजणी १० पेक्षा जास्त प्रकरणे"
+          " अहवाल"
+      )
+      if not df_r6.empty:
+        st.warning(
+            f"⚠️ **१० पेक्षा जास्त प्रलंबित प्रकरणे असलेल्या भूकरमापकांची संख्या:"
+            f" {len(df_r6)}**"
+        )
+        st.dataframe(df_r6, use_container_width=True)
+
+        btn_r6_1, btn_r6_2 = st.columns(2)
+        with btn_r6_1:
+          excel_r6 = convert_df_to_excel(
+              df_r6,
+              report_title=(
+                  "भूकरमापक प्रलंबित मोजणी १० पेक्षा जास्त प्रकरणे अहवाल"
+              ),
+          )
+          st.download_button(
+              label="📥 Download Report 6 (Excel)",
+              data=excel_r6,
+              file_name=f"Report_6_Bhukarmapak_10plus_{today_file_str}.xlsx",
+              mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          )
+        with btn_r6_2:
+          pdf_r6 = generate_report_pdf_html(
+              df_r6,
+              subtitle_text=(
+                  "भूकरमापक प्रलंबित मोजणी १० पेक्षा जास्त प्रकरणे अहवाल"
+              ),
+          )
+          st.download_button(
+              label="📄 Download Report 6 (PDF / Print)",
+              data=pdf_r6,
+              file_name=f"Report_6_Bhukarmapak_10plus_{today_file_str}.pdf",
+              mime="application/pdf" if WEASYPRINT_AVAILABLE else "text/html",
+          )
+
+    with tab8:
+      st.markdown(
+          "## 📑 रिपोर्ट ७: प्रलंबित प्रकरणांची वैयक्तिक यादी (जिल्हा ➔ तालुका"
+          " ➔ भूकरमापक)"
+      )
+      if not df_r7_display.empty:
+        st.info(f"📋 **एकूण वैयक्तिक प्रलंबित प्रकरणे: {len(df_r7_display)}**")
+        st.dataframe(df_r7_display, use_container_width=True)
+
+        btn_r7_1, btn_r7_2 = st.columns(2)
+        with btn_r7_1:
+          excel_r7 = convert_df_to_excel(
+              df_r7_display,
+              report_title=(
+                  "प्रलंबित प्रकरणांची वैयक्तिक यादी (जिल्हा ➔ तालुका ➔"
+                  " भूकरमापक) अहवाल"
+              ),
+          )
+          st.download_button(
+              label="📥 Download Report 7 (Excel)",
+              data=excel_r7,
+              file_name=f"Report_7_Vaiktik_Yadi_{today_file_str}.xlsx",
+              mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          )
+        with btn_r7_2:
+          pdf_r7 = generate_report_pdf_html(
+              df_r7_display,
+              subtitle_text=(
+                  "प्रलंबित प्रकरणांची वैयक्तिक यादी (जिल्हा ➔ तालुका ➔"
+                  " भूकरमापक) अहवाल"
+              ),
+          )
+          st.download_button(
+              label="📄 Download Report 7 (PDF / Print)",
+              data=pdf_r7,
+              file_name=f"Report_7_Vaiktik_Yadi_{today_file_str}.pdf",
+              mime="application/pdf" if WEASYPRINT_AVAILABLE else "text/html",
+          )
+
+else:
+  st.info("👈 कृपया डाव्या बाजूने Excel फाईल Upload करा.")
