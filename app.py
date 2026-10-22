@@ -109,7 +109,7 @@ def load_and_preprocess_data(file_bytes):
   return df_raw, col_mojni_date, col_status
 
 
-# EXCEL HELPER FOR INDIVIDUAL SHEETS
+# EXCEL HELPER FOR INDIVIDUAL SHEETS (HANDLES INDEX & MULTI-INDEX)
 def convert_df_to_excel(df_input, report_title="प्रलंबित मोजणी अहवाल"):
   output = io.BytesIO()
   current_date_str = datetime.date.today().strftime("%d/%m/%Y")
@@ -118,7 +118,7 @@ def convert_df_to_excel(df_input, report_title="प्रलंबित मो�
   ws = wb.active
   ws.title = "Report"
 
-  df = df_input.reset_index() if df_input.index.name is not None else df_input
+  df = df_input.reset_index() if df_input.index.name is not None or isinstance(df_input.index, pd.MultiIndex) else df_input
 
   font_dept = Font(name="Calibri", size=14, bold=True, color="1F4E78")
   font_sub = Font(name="Calibri", size=11, bold=True, color="000000")
@@ -212,7 +212,7 @@ def convert_all_reports_to_single_excel(df_dict):
     ws = wb.create_sheet(title=sheet_name[:31])
     df_data = (
         df_input.reset_index()
-        if df_input.index.name is not None
+        if df_input.index.name is not None or isinstance(df_input.index, pd.MultiIndex)
         else df_input
     )
     total_cols = len(df_data.columns)
@@ -272,7 +272,7 @@ def convert_all_reports_to_single_excel(df_dict):
 
 # PDF GENERATOR
 def generate_report_pdf_html(df_input, subtitle_text=""):
-  df = df_input.reset_index() if df_input.index.name is not None else df_input
+  df = df_input.reset_index() if df_input.index.name is not None or isinstance(df_input.index, pd.MultiIndex) else df_input
   headers = list(df.columns)
   current_date_str = datetime.date.today().strftime("%d/%m/%Y")
 
@@ -336,7 +336,7 @@ def generate_report_pdf_html(df_input, subtitle_text=""):
           )
           else str(int(val) if isinstance(val, (int, float)) else val)
       )
-      align_class = 'class="text-col"' if col_idx == 0 else ""
+      align_class = 'class="text-col"' if col_idx <= 1 else ""
       html += f"<td {align_class}>{val_str}</td>"
 
     html += "</tr>"
@@ -565,7 +565,7 @@ if uploaded_file is not None:
         [df_rep2, pd.DataFrame([total_row_r2])], ignore_index=True
     ).set_index("तालुका")
 
-    # --- REPORT 3 GENERATION ---
+    # --- REPORT 3 GENERATION (UPDATED WITH 180, 365+ BUCKETS) ---
     surveyor_col_r3 = next(
         (
             col
@@ -593,22 +593,26 @@ if uploaded_file is not None:
             curr_today - df_r3_pending["mojni_date_parsed"]
         ).dt.days
 
-        def r3_ageing_bucket(days):
+        def r3_ageing_bucket_ext(days):
           if pd.isna(days):
             return "(blank)"
           elif days <= 15:
-            return "0–15 दिवस वर"
+            return "15 दिवस वर"
           elif days <= 30:
-            return "16–30 दिवस वर"
+            return "30 दिवस वर"
           elif days <= 60:
-            return "31–60 दिवस वर"
+            return "60 दिवस वर"
           elif days <= 90:
-            return "61–90 दिवस वर"
+            return "90 दिवस वर"
+          elif days <= 180:
+            return "180 दिवस वर"
+          elif days <= 365:
+            return "365 दिवस वर"
           else:
-            return "90 दिवसांपेक्षा जास्त"
+            return "365 दिवसांपेक्षा जास्त"
 
         df_r3_pending["Ageing_Bucket"] = df_r3_pending["R3_Pending_Days"].apply(
-            r3_ageing_bucket
+            r3_ageing_bucket_ext
         )
         pivot_r3 = pd.pivot_table(
             df_r3_pending,
@@ -625,11 +629,13 @@ if uploaded_file is not None:
             margins_name="Grand Total",
         )
         r3_bucket_order = [
-            "0–15 दिवस वर",
-            "16–30 दिवस वर",
-            "31–60 दिवस वर",
-            "61–90 दिवस वर",
-            "90 दिवसांपेक्षा जास्त",
+            "15 दिवस वर",
+            "30 दिवस वर",
+            "60 दिवस वर",
+            "90 दिवस वर",
+            "180 दिवस वर",
+            "365 दिवस वर",
+            "365 दिवसांपेक्षा जास्त",
             "(blank)",
             "Grand Total",
         ]
@@ -764,7 +770,7 @@ if uploaded_file is not None:
       pivot_r5.loc["Total"] = total_row_r5
       pivot_r5.index.name = "तालुका"
 
-    # --- REPORT 6 GENERATION ---
+    # --- REPORT 6 GENERATION (FIXED TALUKA & SURVEYOR COLUMNS) ---
     df_r6 = pd.DataFrame()
     if not pivot_r3.empty:
       df_r6_temp = pivot_r3.reset_index()
@@ -892,7 +898,7 @@ if uploaded_file is not None:
     with tab1:
       st.success(f"✅ Total Filtered Cases: **{len(df1)}**")
       st.subheader("📋 तालुका व दिवसनिहाय प्रलंबित प्रकरणे Table")
-      st.dataframe(pivot_df, use_container_width=True)
+      st.dataframe(pivot_df.reset_index(), use_container_width=True)
 
       btn_col1, btn_col2 = st.columns(2)
       with btn_col1:
@@ -920,7 +926,7 @@ if uploaded_file is not None:
 
     with tab2:
       st.subheader("📋 Report 2 - टप्पा व अधिकारी निहाय अहवाल")
-      st.dataframe(df_rep2, use_container_width=True)
+      st.dataframe(df_rep2.reset_index(), use_container_width=True)
 
       btn_r2_1, btn_r2_2 = st.columns(2)
       with btn_r2_1:
@@ -999,7 +1005,7 @@ if uploaded_file is not None:
     with tab4:
       st.markdown("## 📋 रिपोर्ट ३: भूकरमापक निहाय व दिवसनिहाय")
       if not pivot_r3.empty:
-        st.dataframe(pivot_r3, use_container_width=True)
+        st.dataframe(pivot_r3.reset_index(), use_container_width=True)
 
         btn_r3_1, btn_r3_2 = st.columns(2)
         with btn_r3_1:
@@ -1034,7 +1040,7 @@ if uploaded_file is not None:
       st.success(f"🎯 **एकूण मोजणी होणेवर शिल्लक प्रकरणे: {len(df_r4)}**")
 
       if not final_r4_df.empty:
-        st.dataframe(final_r4_df, use_container_width=True)
+        st.dataframe(final_r4_df.reset_index(), use_container_width=True)
 
         btn_r4_1, btn_r4_2 = st.columns(2)
         with btn_r4_1:
@@ -1066,7 +1072,7 @@ if uploaded_file is not None:
       )
 
       if not pivot_r5.empty:
-        st.dataframe(pivot_r5, use_container_width=True)
+        st.dataframe(pivot_r5.reset_index(), use_container_width=True)
 
         btn_r5_1, btn_r5_2 = st.columns(2)
         with btn_r5_1:
@@ -1101,7 +1107,7 @@ if uploaded_file is not None:
             f"⚠️ **१० पेक्षा जास्त प्रलंबित प्रकरणे असलेल्या भूकरमापकांची संख्या:"
             f" {len(df_r6)}**"
         )
-        st.dataframe(df_r6, use_container_width=True)
+        st.dataframe(df_r6.reset_index(), use_container_width=True)
 
         btn_r6_1, btn_r6_2 = st.columns(2)
         with btn_r6_1:
