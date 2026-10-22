@@ -42,6 +42,300 @@ st.markdown(
 st.title("📊 भूमि अभिलेख विभाग - अमरावती | प्रलंबित मोजणी अहवाल व डॅशबोर्ड")
 
 
+# EXCEL HELPER FOR INDIVIDUAL SHEETS (WITH TITLE HEADER)
+def convert_df_to_excel(df, report_title="प्रलंबित मोजणी अहवाल"):
+  output = io.BytesIO()
+  current_date_str = datetime.date.today().strftime("%d/%m/%Y")
+
+  wb = openpyxl.Workbook()
+  ws = wb.active
+  ws.title = "Report"
+
+  font_dept = Font(name="Calibri", size=14, bold=True, color="1F4E78")
+  font_sub = Font(name="Calibri", size=11, bold=True, color="000000")
+  font_th = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+  fill_th = PatternFill(
+      start_color="1F4E78", end_color="1F4E78", fill_type="solid"
+  )
+
+  thin_border = Border(
+      left=Side(style="thin", color="CCCCCC"),
+      right=Side(style="thin", color="CCCCCC"),
+      top=Side(style="thin", color="CCCCCC"),
+      bottom=Side(style="thin", color="CCCCCC"),
+  )
+
+  is_multi = isinstance(df.index, pd.MultiIndex)
+  num_idx_cols = len(df.index.names) if is_multi else 0
+  total_cols = num_idx_cols + len(df.columns)
+
+  # Row 1: Department Title
+  ws.merge_cells(
+      start_row=1, start_column=1, end_row=1, end_column=max(total_cols, 2)
+  )
+  cell_dept = ws.cell(row=1, column=1, value="भूमि अभिलेख विभाग - अमरावती")
+  cell_dept.font = font_dept
+  cell_dept.alignment = Alignment(horizontal="center", vertical="center")
+
+  # Row 2: Subtitle with Date
+  ws.merge_cells(
+      start_row=2, start_column=1, end_row=2, end_column=max(total_cols, 2)
+  )
+  cell_sub = ws.cell(
+      row=2, column=1, value=f"{report_title} ( दिनांक {current_date_str} )"
+  )
+  cell_sub.font = font_sub
+  cell_sub.alignment = Alignment(horizontal="center", vertical="center")
+
+  # Table Headers
+  start_row = 4
+  col_offset = 1
+
+  if is_multi:
+    for i, idx_name in enumerate(df.index.names):
+      cell = ws.cell(row=start_row, column=i + 1, value=idx_name or "")
+      cell.font, cell.fill = font_th, fill_th
+      cell.alignment = Alignment(horizontal="center", vertical="center")
+    col_offset = num_idx_cols + 1
+
+  for j, col_name in enumerate(df.columns):
+    cell = ws.cell(row=start_row, column=col_offset + j, value=str(col_name))
+    cell.font, cell.fill = font_th, fill_th
+    cell.alignment = Alignment(horizontal="center", vertical="center")
+
+  # Rows Data
+  current_r = start_row + 1
+  for idx_val, row in df.iterrows():
+    if is_multi:
+      for k, val in enumerate(idx_val):
+        cell = ws.cell(row=current_r, column=k + 1, value=str(val))
+        cell.alignment = Alignment(horizontal="left", vertical="center")
+        cell.border = thin_border
+
+    for j, col_name in enumerate(df.columns):
+      val = row[col_name]
+      val_clean = (
+          ""
+          if (
+              pd.isna(val)
+              or val == 0
+              or str(val).strip() in ["", "0", "nan", "0.0"]
+          )
+          else (int(val) if isinstance(val, (int, float)) else val)
+      )
+      cell = ws.cell(row=current_r, column=col_offset + j, value=val_clean)
+      cell.alignment = Alignment(horizontal="center", vertical="center")
+      cell.border = thin_border
+
+    current_r += 1
+
+  # Auto Column Width
+  for col in ws.columns:
+    max_len = max(len(str(cell.value or "")) for cell in col)
+    col_letter = openpyxl.utils.get_column_letter(col[0].column)
+    ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+  wb.save(output)
+  return output.getvalue()
+
+
+# MASTER EXCEL HELPER: COMBINES ALL REPORTS INTO SINGLE EXCEL
+def convert_all_reports_to_single_excel(df_dict):
+  output = io.BytesIO()
+  current_date_str = datetime.date.today().strftime("%d/%m/%Y")
+  wb = openpyxl.Workbook()
+  wb.remove(wb.active)
+
+  font_dept = Font(name="Calibri", size=14, bold=True, color="1F4E78")
+  font_sub = Font(name="Calibri", size=11, bold=True, color="000000")
+  font_th = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+  fill_th = PatternFill(
+      start_color="1F4E78", end_color="1F4E78", fill_type="solid"
+  )
+
+  thin_border = Border(
+      left=Side(style="thin", color="CCCCCC"),
+      right=Side(style="thin", color="CCCCCC"),
+      top=Side(style="thin", color="CCCCCC"),
+      bottom=Side(style="thin", color="CCCCCC"),
+  )
+
+  for sheet_name, (df_data, report_title) in df_dict.items():
+    ws = wb.create_sheet(title=sheet_name[:31])
+
+    is_multi = isinstance(df_data.index, pd.MultiIndex)
+    num_idx_cols = len(df_data.index.names) if is_multi else 0
+    total_cols = num_idx_cols + len(df_data.columns)
+
+    # Title Headers
+    ws.merge_cells(
+        start_row=1, start_column=1, end_row=1, end_column=max(total_cols, 2)
+    )
+    c1 = ws.cell(row=1, column=1, value="भूमि अभिलेख विभाग - अमरावती")
+    c1.font, c1.alignment = font_dept, Alignment(
+        horizontal="center", vertical="center"
+    )
+
+    ws.merge_cells(
+        start_row=2, start_column=1, end_row=2, end_column=max(total_cols, 2)
+    )
+    c2 = ws.cell(
+        row=2, column=1, value=f"{report_title} ( दिनांक {current_date_str} )"
+    )
+    c2.font, c2.alignment = font_sub, Alignment(
+        horizontal="center", vertical="center"
+    )
+
+    start_row = 4
+    col_offset = 1
+
+    if is_multi:
+      for i, idx_name in enumerate(df_data.index.names):
+        cell = ws.cell(row=start_row, column=i + 1, value=idx_name or "")
+        cell.font, cell.fill = font_th, fill_th
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+      col_offset = num_idx_cols + 1
+
+    for j, col_name in enumerate(df_data.columns):
+      cell = ws.cell(row=start_row, column=col_offset + j, value=str(col_name))
+      cell.font, cell.fill = font_th, fill_th
+      cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    current_r = start_row + 1
+    for idx_val, row in df_data.iterrows():
+      if is_multi:
+        for k, val in enumerate(idx_val):
+          cell = ws.cell(row=current_r, column=k + 1, value=str(val))
+          cell.alignment = Alignment(horizontal="left", vertical="center")
+          cell.border = thin_border
+
+      for j, col_name in enumerate(df_data.columns):
+        val = row[col_name]
+        val_clean = (
+            ""
+            if (
+                pd.isna(val)
+                or val == 0
+                or str(val).strip() in ["", "0", "nan", "0.0"]
+            )
+            else (int(val) if isinstance(val, (int, float)) else val)
+        )
+        cell = ws.cell(row=current_r, column=col_offset + j, value=val_clean)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+      current_r += 1
+
+    for col in ws.columns:
+      max_len = max(len(str(cell.value or "")) for cell in col)
+      col_letter = openpyxl.utils.get_column_letter(col[0].column)
+      ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+  wb.save(output)
+  return output.getvalue()
+
+
+# PROFESSIONAL & CLEAN PDF GENERATOR FOR ALL REPORTS
+def generate_report_pdf_html(df, subtitle_text=""):
+  headers = list(df.columns)
+  current_date_str = datetime.date.today().strftime("%d/%m/%Y")
+  is_multi_index = isinstance(df.index, pd.MultiIndex)
+
+  html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            @page {{ size: A4 landscape; margin: 8mm; }}
+            body {{ font-family: 'Helvetica Neue', 'Arial', sans-serif; margin: 0; padding: 0; background-color: #ffffff; color: #111; }}
+            .header-container {{ text-align: center; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 2px solid #1a365d; }}
+            .dept-title {{ font-size: 15px; font-weight: bold; color: #1a365d; text-transform: uppercase; margin-bottom: 2px; }}
+            .report-title {{ font-size: 12px; font-weight: 600; color: #2b6cb0; }}
+            table {{ width: 100%; border-collapse: collapse; border: 1px solid #4a5568; margin-top: 4px; font-size: 8.5px; table-layout: auto; }}
+            thead {{ display: table-header-group; }}
+            tr {{ page-break-inside: avoid; }}
+            th {{ background-color: #1a365d; color: #ffffff; font-weight: bold; font-size: 8.5px; padding: 4px 2px; border: 1px solid #2d3748; text-align: center; line-height: 1.1; }}
+            td {{ padding: 3px 2px; font-size: 8px; border: 1px solid #cbd5e0; text-align: center; color: #2d3748; line-height: 1.1; }}
+            tbody tr:nth-child(even) {{ background-color: #f7fafc; }}
+            .text-col {{ text-align: left !important; padding-left: 4px !important; font-weight: 500; }}
+            .total-row td {{ font-weight: bold !important; background-color: #edf2f7 !important; color: #1a365d !important; border-top: 1.5px solid #1a365d !important; }}
+        </style>
+    </head>
+    <body>
+        <div class="header-container">
+            <div class="dept-title">भूमि अभिलेख विभाग - अमरावती</div>
+            <div class="report-title">{subtitle_text} ( दिनांक {current_date_str} )</div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+    """
+
+  if is_multi_index:
+    for idx_name in df.index.names:
+      html += f"<th>{idx_name}</th>"
+
+  for h in headers:
+    html += f"<th>{h}</th>"
+
+  html += """
+                </tr>
+            </thead>
+            <tbody>
+    """
+
+  for idx, row in df.iterrows():
+    idx_str = str(idx)
+    is_total = (
+        "Total" in idx_str or "एकूण" in idx_str or "Grand Total" in idx_str
+    )
+    row_class = "total-row" if is_total else ""
+
+    html += f'<tr class="{row_class}">'
+
+    if is_multi_index:
+      for idx_item in idx:
+        html += f'<td class="text-col">{idx_item}</td>'
+
+    for col_name in headers:
+      val = row[col_name]
+      val_str = (
+          ""
+          if (
+              pd.isna(val)
+              or val == 0
+              or str(val).strip() in ["", "0", "nan", "0.0"]
+          )
+          else str(int(val) if isinstance(val, (int, float)) else val)
+      )
+      html += f"<td>{val_str}</td>"
+
+    html += "</tr>"
+
+  html += """
+            </tbody>
+        </table>
+    </body>
+    </html>
+    """
+
+  if WEASYPRINT_AVAILABLE:
+    try:
+      return HTML(string=html).write_pdf()
+    except Exception:
+      return html.encode("utf-8")
+  else:
+    return html.encode("utf-8")
+
+
+# Sidebar File Upload
+st.sidebar.header("⚙️ File Upload & Options")
+uploaded_file = st.sidebar.file_uploader(
+    "📁 Main E-Mojani Raw Excel (.xlsx)", type=["xlsx"], key="single_file"
+)
+
+
 def parse_excel_date(val):
   if pd.isna(val) or str(val).strip() in ["", "nan", "NaT"]:
     return pd.NaT
@@ -52,12 +346,10 @@ def parse_excel_date(val):
     return pd.to_datetime(val, dayfirst=True, errors="coerce")
 
 
-# CACHED DATA LOAD TO SAVE MEMORY
-@st.cache_data(show_spinner="लोड होत आहे...")
-def load_and_preprocess_data(file_bytes):
-  df_raw = pd.read_excel(file_bytes)
+if uploaded_file is not None:
+  df_raw = pd.read_excel(uploaded_file)
   if "मोजणी तारीख" not in df_raw.columns:
-    df_raw = pd.read_excel(file_bytes, header=1)
+    df_raw = pd.read_excel(uploaded_file, header=1)
 
   if "तालुका" in df_raw.columns:
     df_raw["तालुका"] = df_raw["तालुका"].astype(str).str.strip()
@@ -91,6 +383,7 @@ def load_and_preprocess_data(file_bytes):
   else:
     df_raw["k_prat_date_parsed"] = df_raw["mojni_date_parsed"]
 
+  # Parse Application Accept Date
   col_app_accept_date_raw = next(
       (
           c
@@ -105,266 +398,6 @@ def load_and_preprocess_data(file_bytes):
     )
   else:
     df_raw["app_accept_date_parsed"] = df_raw["mojni_date_parsed"]
-
-  return df_raw, col_mojni_date, col_status
-
-
-# EXCEL HELPER FOR INDIVIDUAL SHEETS
-def convert_df_to_excel(df_input, report_title="प्रलंबित मोजणी अहवाल"):
-  output = io.BytesIO()
-  current_date_str = datetime.date.today().strftime("%d/%m/%Y")
-
-  wb = openpyxl.Workbook()
-  ws = wb.active
-  ws.title = "Report"
-
-  df = df_input.reset_index() if df_input.index.name is not None else df_input
-
-  font_dept = Font(name="Calibri", size=14, bold=True, color="1F4E78")
-  font_sub = Font(name="Calibri", size=11, bold=True, color="000000")
-  font_th = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-  fill_th = PatternFill(
-      start_color="1F4E78", end_color="1F4E78", fill_type="solid"
-  )
-
-  thin_border = Border(
-      left=Side(style="thin", color="CCCCCC"),
-      right=Side(style="thin", color="CCCCCC"),
-      top=Side(style="thin", color="CCCCCC"),
-      bottom=Side(style="thin", color="CCCCCC"),
-  )
-
-  total_cols = len(df.columns)
-
-  ws.merge_cells(
-      start_row=1, start_column=1, end_row=1, end_column=max(total_cols, 2)
-  )
-  cell_dept = ws.cell(row=1, column=1, value="भूमि अभिलेख विभाग - अमरावती")
-  cell_dept.font = font_dept
-  cell_dept.alignment = Alignment(horizontal="center", vertical="center")
-
-  ws.merge_cells(
-      start_row=2, start_column=1, end_row=2, end_column=max(total_cols, 2)
-  )
-  cell_sub = ws.cell(
-      row=2, column=1, value=f"{report_title} ( दिनांक {current_date_str} )"
-  )
-  cell_sub.font = font_sub
-  cell_sub.alignment = Alignment(horizontal="center", vertical="center")
-
-  start_row = 4
-  for j, col_name in enumerate(df.columns):
-    cell = ws.cell(row=start_row, column=j + 1, value=str(col_name))
-    cell.font, cell.fill = font_th, fill_th
-    cell.alignment = Alignment(horizontal="center", vertical="center")
-
-  current_r = start_row + 1
-  for idx_val, row in df.iterrows():
-    for j, col_name in enumerate(df.columns):
-      val = row[col_name]
-      val_clean = (
-          ""
-          if (
-              pd.isna(val)
-              or val == 0
-              or str(val).strip() in ["", "0", "nan", "0.0"]
-          )
-          else (int(val) if isinstance(val, (int, float)) else val)
-      )
-      cell = ws.cell(row=current_r, column=j + 1, value=val_clean)
-      cell.alignment = Alignment(
-          horizontal="left" if j <= 1 else "center", vertical="center"
-      )
-      cell.border = thin_border
-    current_r += 1
-
-  for col in ws.columns:
-    max_len = max(len(str(cell.value or "")) for cell in col)
-    col_letter = openpyxl.utils.get_column_letter(col[0].column)
-    ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
-
-  wb.save(output)
-  return output.getvalue()
-
-
-# MASTER EXCEL HELPER
-def convert_all_reports_to_single_excel(df_dict):
-  output = io.BytesIO()
-  current_date_str = datetime.date.today().strftime("%d/%m/%Y")
-  wb = openpyxl.Workbook()
-  wb.remove(wb.active)
-
-  font_dept = Font(name="Calibri", size=14, bold=True, color="1F4E78")
-  font_sub = Font(name="Calibri", size=11, bold=True, color="000000")
-  font_th = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-  fill_th = PatternFill(
-      start_color="1F4E78", end_color="1F4E78", fill_type="solid"
-  )
-
-  thin_border = Border(
-      left=Side(style="thin", color="CCCCCC"),
-      right=Side(style="thin", color="CCCCCC"),
-      top=Side(style="thin", color="CCCCCC"),
-      bottom=Side(style="thin", color="CCCCCC"),
-  )
-
-  for sheet_name, (df_input, report_title) in df_dict.items():
-    ws = wb.create_sheet(title=sheet_name[:31])
-    df_data = (
-        df_input.reset_index()
-        if df_input.index.name is not None
-        else df_input
-    )
-    total_cols = len(df_data.columns)
-
-    ws.merge_cells(
-        start_row=1, start_column=1, end_row=1, end_column=max(total_cols, 2)
-    )
-    c1 = ws.cell(row=1, column=1, value="भूमि अभिलेख विभाग - अमरावती")
-    c1.font, c1.alignment = font_dept, Alignment(
-        horizontal="center", vertical="center"
-    )
-
-    ws.merge_cells(
-        start_row=2, start_column=1, end_row=2, end_column=max(total_cols, 2)
-    )
-    c2 = ws.cell(
-        row=2, column=1, value=f"{report_title} ( दिनांक {current_date_str} )"
-    )
-    c2.font, c2.alignment = font_sub, Alignment(
-        horizontal="center", vertical="center"
-    )
-
-    start_row = 4
-    for j, col_name in enumerate(df_data.columns):
-      cell = ws.cell(row=start_row, column=j + 1, value=str(col_name))
-      cell.font, cell.fill = font_th, fill_th
-      cell.alignment = Alignment(horizontal="center", vertical="center")
-
-    current_r = start_row + 1
-    for idx_val, row in df_data.iterrows():
-      for j, col_name in enumerate(df_data.columns):
-        val = row[col_name]
-        val_clean = (
-            ""
-            if (
-                pd.isna(val)
-                or val == 0
-                or str(val).strip() in ["", "0", "nan", "0.0"]
-            )
-            else (int(val) if isinstance(val, (int, float)) else val)
-        )
-        cell = ws.cell(row=current_r, column=j + 1, value=val_clean)
-        cell.alignment = Alignment(
-            horizontal="left" if j <= 1 else "center", vertical="center"
-        )
-        cell.border = thin_border
-      current_r += 1
-
-    for col in ws.columns:
-      max_len = max(len(str(cell.value or "")) for cell in col)
-      col_letter = openpyxl.utils.get_column_letter(col[0].column)
-      ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
-
-  wb.save(output)
-  return output.getvalue()
-
-
-# PDF GENERATOR
-def generate_report_pdf_html(df_input, subtitle_text=""):
-  df = df_input.reset_index() if df_input.index.name is not None else df_input
-  headers = list(df.columns)
-  current_date_str = datetime.date.today().strftime("%d/%m/%Y")
-
-  html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <style>
-            @page {{ size: A4 landscape; margin: 8mm; }}
-            body {{ font-family: 'Helvetica Neue', 'Arial', sans-serif; margin: 0; padding: 0; background-color: #ffffff; color: #111; }}
-            .header-container {{ text-align: center; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 2px solid #1a365d; }}
-            .dept-title {{ font-size: 15px; font-weight: bold; color: #1a365d; text-transform: uppercase; margin-bottom: 2px; }}
-            .report-title {{ font-size: 12px; font-weight: 600; color: #2b6cb0; }}
-            table {{ width: 100%; border-collapse: collapse; border: 1px solid #4a5568; margin-top: 4px; font-size: 8.5px; table-layout: auto; }}
-            thead {{ display: table-header-group; }}
-            tr {{ page-break-inside: avoid; }}
-            th {{ background-color: #1a365d; color: #ffffff; font-weight: bold; font-size: 8.5px; padding: 4px 2px; border: 1px solid #2d3748; text-align: center; line-height: 1.1; }}
-            td {{ padding: 3px 2px; font-size: 8px; border: 1px solid #cbd5e0; text-align: center; color: #2d3748; line-height: 1.1; }}
-            tbody tr:nth-child(even) {{ background-color: #f7fafc; }}
-            .text-col {{ text-align: left !important; padding-left: 4px !important; font-weight: 500; }}
-            .total-row td {{ font-weight: bold !important; background-color: #edf2f7 !important; color: #1a365d !important; border-top: 1.5px solid #1a365d !important; }}
-        </style>
-    </head>
-    <body>
-        <div class="header-container">
-            <div class="dept-title">भूमि अभिलेख विभाग - अमरावती</div>
-            <div class="report-title">{subtitle_text} ( दिनांक {current_date_str} )</div>
-        </div>
-        <table>
-            <thead>
-                <tr>
-    """
-
-  for h in headers:
-    html += f"<th>{h}</th>"
-
-  html += """
-                </tr>
-            </thead>
-            <tbody>
-    """
-
-  for idx, row in df.iterrows():
-    idx_str = str(row.iloc[0])
-    is_total = (
-        "Total" in idx_str or "एकूण" in idx_str or "Grand Total" in idx_str
-    )
-    row_class = "total-row" if is_total else ""
-
-    html += f'<tr class="{row_class}">'
-
-    for col_idx, col_name in enumerate(headers):
-      val = row[col_name]
-      val_str = (
-          ""
-          if (
-              pd.isna(val)
-              or val == 0
-              or str(val).strip() in ["", "0", "nan", "0.0"]
-          )
-          else str(int(val) if isinstance(val, (int, float)) else val)
-      )
-      align_class = 'class="text-col"' if col_idx == 0 else ""
-      html += f"<td {align_class}>{val_str}</td>"
-
-    html += "</tr>"
-
-  html += """
-            </tbody>
-        </table>
-    </body>
-    </html>
-    """
-
-  if WEASYPRINT_AVAILABLE:
-    try:
-      return HTML(string=html).write_pdf()
-    except Exception:
-      return html.encode("utf-8")
-  else:
-    return html.encode("utf-8")
-
-
-# Sidebar File Upload
-st.sidebar.header("⚙️ File Upload & Options")
-uploaded_file = st.sidebar.file_uploader(
-    "📁 Main E-Mojani Raw Excel (.xlsx)", type=["xlsx"], key="single_file"
-)
-
-if uploaded_file is not None:
-  df_raw, col_mojni_date, col_status = load_and_preprocess_data(uploaded_file)
 
   min_excel_date = df_raw["mojni_date_parsed"].min()
   max_excel_date = df_raw["mojni_date_parsed"].max()
@@ -417,6 +450,9 @@ if uploaded_file is not None:
         "📑 Report 7 (वैयक्तिक यादी)",
     ])
 
+    from_str = start_date.strftime("%d/%m/%Y")
+    to_str = end_date.strftime("%d/%m/%Y")
+
     # --- REPORT 1 GENERATION ---
     df1 = df_raw[df_raw[col_status].isin(selected_statuses)].copy()
     start_dt, end_dt = pd.to_datetime(start_date), pd.to_datetime(end_date)
@@ -426,7 +462,7 @@ if uploaded_file is not None:
     ].copy()
     df1["Pending Days"] = (end_dt - df1["mojni_date_parsed"]).dt.days
 
-    def day_bucket_extended(days):
+    def day_bucket(days):
       if pd.isna(days):
         return "तारीख उपलब्ध नाही"
       if days <= 15:
@@ -437,33 +473,26 @@ if uploaded_file is not None:
         return "60 दिवस वर"
       elif days <= 90:
         return "90 दिवस वर"
-      elif days <= 180:
-        return "180 दिवस वर"
-      elif days <= 365:
-        return "365 दिवस वर"
       else:
-        return "365 दिवसांपेक्षा जास्त"
+        return "90 दिवसांपेक्षा जास्त"
 
-    df1["दिवस वर"] = df1["Pending Days"].apply(day_bucket_extended)
-    bucket_order_ext = [
+    df1["दिवस वर"] = df1["Pending Days"].apply(day_bucket)
+    bucket_order = [
         "15 दिवस वर",
         "30 दिवस वर",
         "60 दिवस वर",
         "90 दिवस वर",
-        "180 दिवस वर",
-        "365 दिवस वर",
-        "365 दिवसांपेक्षा जास्त",
+        "90 दिवसांपेक्षा जास्त",
     ]
     pivot_df = pd.crosstab(
         df1["तालुका"], df1["दिवस वर"], margins=True, margins_name="एकूण"
     )
-    existing_cols = [c for c in bucket_order_ext if c in pivot_df.columns]
+    existing_cols = [c for c in bucket_order if c in pivot_df.columns]
     if "तारीख उपलब्ध नाही" in pivot_df.columns:
       existing_cols.append("तारीख उपलब्ध नाही")
     if "एकूण" in pivot_df.columns:
       existing_cols.append("एकूण")
     pivot_df = pivot_df[existing_cols]
-    pivot_df.index.name = "तालुका"
 
     # --- REPORT 2 GENERATION ---
     r2_start_dt, r2_end_dt = pd.to_datetime(min_excel_date), pd.to_datetime(
@@ -698,7 +727,6 @@ if uploaded_file is not None:
           [district_total], index=["अमरावती (जिल्हा एकूण)"]
       )
       final_r4_df = pd.concat([df_district_row, pivot_r4])
-      final_r4_df.index.name = "तालुका"
 
     # --- REPORT 5 GENERATION ---
     today_ref_r5 = pd.to_datetime(datetime.date.today())
@@ -762,7 +790,6 @@ if uploaded_file is not None:
 
       total_row_r5 = pivot_r5.sum(axis=0)
       pivot_r5.loc["Total"] = total_row_r5
-      pivot_r5.index.name = "तालुका"
 
     # --- REPORT 6 GENERATION ---
     df_r6 = pd.DataFrame()
@@ -775,7 +802,7 @@ if uploaded_file is not None:
             ["तालुका", surveyor_col_r3]
         )
 
-    # --- REPORT 7 GENERATION ---
+    # --- REPORT 7 GENERATION (4 SPECIFIC STATUSES & ACC DATE TO MOJNI DATE DAYS) ---
     r7_target_statuses = [
         "ऊप.अ. भू. अ/ न .भू अ यांच्या मान्यतेवर",
         "छाननी लिपिक यांनी तपासले",
@@ -798,6 +825,7 @@ if uploaded_file is not None:
         (c for c in ["गाव", "Village"] if c in df_r7.columns), None
     )
 
+    # Calculate Days: Mojni Date - Application Accept Date
     df_r7["दिवस"] = (
         df_r7["mojni_date_parsed"] - df_r7["app_accept_date_parsed"]
     ).dt.days
@@ -806,7 +834,7 @@ if uploaded_file is not None:
       if pd.isna(days) or days < 0:
         return "-"
       elif days <= 15:
-        return "0-15"
+        return "15-30" if days > 15 else "0-15"
       elif days <= 30:
         return "15-30"
       elif days <= 60:
@@ -820,6 +848,7 @@ if uploaded_file is not None:
 
     df_r7["कालावधी"] = df_r7["दिवस"].apply(r7_kalavadhi)
 
+    # Format dates to string
     df_r7["मोजणी तारीख प्रदर्शित"] = df_r7["mojni_date_parsed"].dt.strftime(
         "%d-%m-%Y"
     )
@@ -1131,6 +1160,7 @@ if uploaded_file is not None:
               mime="application/pdf" if WEASYPRINT_AVAILABLE else "text/html",
           )
 
+    # TAB 8: REPORT 7
     with tab8:
       st.markdown(
           "## 📑 रिपोर्ट ७: प्रलंबित प्रकरणांची वैयक्तिक यादी (जिल्हा ➔ तालुका"
