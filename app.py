@@ -52,7 +52,7 @@ def parse_excel_date(val):
     return pd.to_datetime(val, dayfirst=True, errors="coerce")
 
 
-# CACHED DATA LOAD TO SAVE MEMORY
+# CACHED DATA LOAD TO SAVE MEMORY & PREVENT CRASHES
 @st.cache_data(show_spinner="लोड होत आहे...")
 def load_and_preprocess_data(file_bytes):
   df_raw = pd.read_excel(file_bytes)
@@ -109,7 +109,7 @@ def load_and_preprocess_data(file_bytes):
   return df_raw, col_mojni_date, col_status
 
 
-# EXCEL HELPER FOR INDIVIDUAL SHEETS (HANDLES INDEX & MULTI-INDEX)
+# EXCEL HELPER FOR INDIVIDUAL SHEETS
 def convert_df_to_excel(df_input, report_title="प्रलंबित मोजणी अहवाल"):
   output = io.BytesIO()
   current_date_str = datetime.date.today().strftime("%d/%m/%Y")
@@ -118,7 +118,12 @@ def convert_df_to_excel(df_input, report_title="प्रलंबित मो�
   ws = wb.active
   ws.title = "Report"
 
-  df = df_input.reset_index() if df_input.index.name is not None or isinstance(df_input.index, pd.MultiIndex) else df_input
+  df = (
+      df_input.reset_index()
+      if df_input.index.name is not None
+      or isinstance(df_input.index, pd.MultiIndex)
+      else df_input
+  )
 
   font_dept = Font(name="Calibri", size=14, bold=True, color="1F4E78")
   font_sub = Font(name="Calibri", size=11, bold=True, color="000000")
@@ -187,7 +192,7 @@ def convert_df_to_excel(df_input, report_title="प्रलंबित मो�
   return output.getvalue()
 
 
-# MASTER EXCEL HELPER
+# MASTER EXCEL HELPER: COMBINES ALL 7 REPORTS INTO A SINGLE WORKBOOK
 def convert_all_reports_to_single_excel(df_dict):
   output = io.BytesIO()
   current_date_str = datetime.date.today().strftime("%d/%m/%Y")
@@ -212,7 +217,8 @@ def convert_all_reports_to_single_excel(df_dict):
     ws = wb.create_sheet(title=sheet_name[:31])
     df_data = (
         df_input.reset_index()
-        if df_input.index.name is not None or isinstance(df_input.index, pd.MultiIndex)
+        if df_input.index.name is not None
+        or isinstance(df_input.index, pd.MultiIndex)
         else df_input
     )
     total_cols = len(df_data.columns)
@@ -272,7 +278,12 @@ def convert_all_reports_to_single_excel(df_dict):
 
 # PDF GENERATOR
 def generate_report_pdf_html(df_input, subtitle_text=""):
-  df = df_input.reset_index() if df_input.index.name is not None or isinstance(df_input.index, pd.MultiIndex) else df_input
+  df = (
+      df_input.reset_index()
+      if df_input.index.name is not None
+      or isinstance(df_input.index, pd.MultiIndex)
+      else df_input
+  )
   headers = list(df.columns)
   current_date_str = datetime.date.today().strftime("%d/%m/%Y")
 
@@ -565,7 +576,7 @@ if uploaded_file is not None:
         [df_rep2, pd.DataFrame([total_row_r2])], ignore_index=True
     ).set_index("तालुका")
 
-    # --- REPORT 3 GENERATION (UPDATED WITH 180, 365+ BUCKETS) ---
+    # --- REPORT 3 GENERATION (WITH 180, 365+ AGEING BUCKETS) ---
     surveyor_col_r3 = next(
         (
             col
@@ -770,7 +781,7 @@ if uploaded_file is not None:
       pivot_r5.loc["Total"] = total_row_r5
       pivot_r5.index.name = "तालुका"
 
-    # --- REPORT 6 GENERATION (FIXED TALUKA & SURVEYOR COLUMNS) ---
+    # --- REPORT 6 GENERATION ---
     df_r6 = pd.DataFrame()
     if not pivot_r3.empty:
       df_r6_temp = pivot_r3.reset_index()
@@ -781,7 +792,7 @@ if uploaded_file is not None:
             ["तालुका", surveyor_col_r3]
         )
 
-    # --- REPORT 7 GENERATION ---
+    # --- REPORT 7 GENERATION (ONLY UP TO TODAY'S MOJNI DATE) ---
     r7_target_statuses = [
         "ऊप.अ. भू. अ/ न .भू अ यांच्या मान्यतेवर",
         "छाननी लिपिक यांनी तपासले",
@@ -789,8 +800,13 @@ if uploaded_file is not None:
         "मोजणीची माहिती",
     ]
 
+    curr_today_r7 = pd.to_datetime(datetime.date.today())
+
+    # STRICT FILTER: Status matched AND Mojni Date <= Today's Date
     df_r7 = df_raw[
-        df_raw[col_status].astype(str).str.strip().isin(r7_target_statuses)
+        (df_raw[col_status].astype(str).str.strip().isin(r7_target_statuses))
+        & (df_raw["mojni_date_parsed"].notna())
+        & (df_raw["mojni_date_parsed"] <= curr_today_r7)
     ].copy()
 
     col_app_no = next(
