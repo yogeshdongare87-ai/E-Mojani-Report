@@ -3,141 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>भूमि अभिलेख - अमरावती (E-Mojani Smart Dashboard)</title>
+    <title>E-Mojani Filtered Pending Report Generator & Dashboard</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <!-- SheetJS for Excel Processing -->
+    <!-- SheetJS for Excel handling -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Chart.js for Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .sidebar { width: 320px; flex-shrink: 0; }
+        .tab-btn.active { border-bottom: 3px solid #2563eb; color: #2563eb; font-weight: bold; }
+        .metric-card { background: #f8fafc; border-left: 6px solid #16a34a; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
+    </style>
 </head>
-<body class="bg-gray-100 font-sans min-h-screen pb-12">
+<body class="bg-gray-100 font-sans min-h-screen flex flex-col">
 
     <!-- Header -->
-    <header class="bg-white shadow-sm py-4 mb-6 border-b">
-        <div class="max-w-7xl mx-auto px-4 text-center">
-            <h1 class="text-2xl font-bold text-slate-800">🏛️ भूमि अभिलेख विभाग - अमरावती</h1>
-            <p class="text-sm text-gray-600 mt-1">E-Mojani Filtered Pending Report Generator & Smart Dashboard</p>
-        </div>
+    <header class="bg-white border-b shadow-sm py-4 px-6 text-center">
+        <h1 class="text-2xl font-bold text-gray-800">📊 भूमि अभिलेख विभाग - अमरावती | प्रलंबित मोजणी अहवाल व डॅशबोर्ड</h1>
     </header>
 
-    <main class="max-w-6xl mx-auto px-4">
-        <!-- Upload Card -->
-        <div class="bg-white rounded-xl shadow-md p-6 mb-6 border border-gray-200">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                <div class="border-2 border-dashed border-indigo-200 rounded-lg p-6 text-center hover:border-indigo-400 transition bg-indigo-50/30">
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">📁 E-Mojani Raw Excel फाइल चुनें</label>
-                    <input type="file" id="excelFile" accept=".xlsx, .xls" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer"/>
-                </div>
-                <div class="text-center md:text-left">
-                    <button onclick="processData()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition duration-200 flex items-center justify-center gap-2 mx-auto">
-                        🚀 डेटा प्रक्रिया करा (Process Data)
-                    </button>
-                    <p id="statusText" class="text-sm text-gray-500 mt-3 font-medium text-center">कृपया Excel फाइल चुनकर बटन दबाएं...</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Dashboard Results Section -->
-        <div id="resultsSection" class="hidden space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm text-center border-l-4 border-l-blue-600">
-                    <h3 class="text-xs font-bold text-gray-500 uppercase">एकूण प्रोसेस प्रकरणे</h3>
-                    <p id="totalCases" class="text-2xl font-extrabold text-blue-600 mt-1">0</p>
-                </div>
-                <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm text-center border-l-4 border-l-emerald-600">
-                    <h3 class="text-xs font-bold text-gray-500 uppercase">मास्टर रिपोर्ट डाउनलोड</h3>
-                    <div class="mt-2">
-                        <button onclick="downloadMasterExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-4 rounded shadow">
-                            📥 Download Master Excel
-                        </button>
-                    </div>
-                </div>
-                <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm text-center border-l-4 border-l-amber-500">
-                    <h3 class="text-xs font-bold text-gray-500 uppercase">डैशबोर्ड स्टेटस</h3>
-                    <p class="text-sm font-semibold text-emerald-600 mt-2">✅ डेटा तयार आहे</p>
-                </div>
-            </div>
-
-            <!-- Preview Table -->
-            <div class="bg-white rounded-xl shadow-md p-6 border border-gray-200">
-                <h3 class="text-lg font-bold text-gray-800 mb-4">📊 डेटा प्रीव्ह्यू (Data Preview)</h3>
-                <div class="overflow-x-auto max-h-96">
-                    <table id="previewTable" class="w-full text-xs text-left border-collapse"></table>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <script>
-        let globalData = [];
-
-        function processData() {
-            const fileInput = document.getElementById('excelFile');
-            const statusText = document.getElementById('statusText');
-
-            if (!fileInput.files.length) {
-                alert('कृपया आधी Excel फाइल निवडा!');
-                return;
-            }
-
-            statusText.innerText = "🔄 डेटा प्रोसेस होत आहे...";
-            statusText.className = "text-sm text-blue-600 mt-3 font-medium text-center";
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, {type: 'array'});
-                    const sheetName = workbook.SheetNames[0];
-                    const sheet = workbook.Sheets[sheetName];
-                    globalData = XLSX.utils.sheet_to_json(sheet);
-
-                    document.getElementById('totalCases').innerText = globalData.length;
-                    document.getElementById('resultsSection').classList.remove('hidden');
-                    renderTable(globalData.slice(0, 50));
-
-                    statusText.innerText = "✅ डेटा यशस्वीरित्या लोड झाला!";
-                    statusText.className = "text-sm text-green-600 mt-3 font-bold text-center";
-                } catch (error) {
-                    alert("त्रुटी: " + error.message);
-                    statusText.innerText = "❌ प्रक्रिया अयशस्वी!";
-                    statusText.className = "text-sm text-red-600 mt-3 font-bold text-center";
-                }
-            };
-            reader.readAsArrayBuffer(fileInput.files[0]);
-        }
-
-        function renderTable(data) {
-            if (!data.length) return;
-            const table = document.getElementById('previewTable');
-            let html = "<thead class='bg-gray-800 text-white'><tr>";
-            const headers = Object.keys(data[0]);
-            
-            headers.forEach(h => {
-                html += `<th class='p-2 border border-gray-700'>${h}</th>`;
-            });
-            html += "</tr></thead><tbody>";
-
-            data.forEach(row => {
-                html += "<tr class='hover:bg-gray-50 border-b'>";
-                headers.forEach(h => {
-                    html += `<td class='p-2 border border-gray-200'>${row[h] || ''}</td>`;
-                });
-                html += "</tr>";
-            });
-            html += "</tbody>";
-            table.innerHTML = html;
-        }
-
-        function downloadMasterExcel() {
-            if (!globalData.length) {
-                alert("आधी डेटा प्रोसेस करा!");
-                return;
-            }
-            const newWB = XLSX.utils.book_new();
-            const ws = XLSX.utils.json_to_sheet(globalData);
-            XLSX.utils.book_append_sheet(newWB, ws, "Master_Reports");
-            XLSX.writeFile(newWB, "All_Mojni_Reports_Master.xlsx");
-        }
-    </script>
-</body>
-</html>
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="sidebar bg-white border-r p-5 overflow-y-auto">
+            <h
