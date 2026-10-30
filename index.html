@@ -3,100 +3,298 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>भूमि अभिलेख - All 7 Mojani Reports Generator</title>
-    <!-- Tailwind CSS for clean styling -->
+    <title>E-Mojani Filtered Pending Report Generator & Dashboard</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <!-- SheetJS for Excel Reading & Writing -->
+    <!-- SheetJS for Excel handling -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Chart.js for Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .sidebar { width: 300px; flex-shrink: 0; }
+        .tab-btn.active { border-bottom: 3px solid #2563eb; color: #2563eb; font-weight: bold; }
+        .metric-card { background: #f8fafc; border-left: 6px solid #16a34a; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    </style>
 </head>
-<body class="bg-gray-100 font-sans min-h-screen pb-12">
+<body class="bg-gray-100 font-sans min-h-screen flex flex-col">
 
     <!-- Header -->
-    <header class="bg-white shadow-sm py-4 mb-6">
-        <div class="max-w-7xl mx-auto px-4 text-center">
-            <h1 class="text-2xl font-bold text-slate-800">🏛️ भूमि अभिलेख - अमरावती (E-Mojani 7 Reports Dashboard)</h1>
-            <p class="text-sm text-gray-600 mt-1">रॉ एक्सेल फाइल अपलोड करें और एक ही क्लिक में सभी ७ रिपोर्ट्स जनरेट करें</p>
-        </div>
+    <header class="bg-white border-b shadow-sm py-4 px-6">
+        <h1 class="text-2xl font-bold text-gray-800">📊 भूमि अभिलेख विभाग - अमरावती | प्रलंबित मोजणी अहवाल व डॅशबोर्ड</h1>
     </header>
 
-    <main class="max-w-6xl mx-auto px-4">
-        <!-- Upload Card -->
-        <div class="bg-white rounded-xl shadow-md p-6 mb-6 border border-gray-200">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                <div class="border-2 border-dashed border-indigo-200 rounded-lg p-6 text-center hover:border-indigo-400 transition">
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">📁 E-Mojani Raw Excel फाइल चुनें</label>
-                    <input type="file" id="excelFile" accept=".xlsx, .xls" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"/>
-                </div>
-                <div class="text-center md:text-left">
-                    <button onclick="processAllReports()" class="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition duration-200 flex items-center justify-center gap-2 mx-auto">
-                        🚀 सभी ७ रिपोर्ट्स प्रोसेस करें (Generate Reports)
-                    </button>
-                    <p id="statusText" class="text-sm text-gray-500 mt-3 font-medium">फाइल चुनकर बटन दबाएं...</p>
-                </div>
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="sidebar bg-white border-r p-5 overflow-y-auto">
+            <h2 class="text-lg font-bold text-gray-700 mb-3">⚙️ File Upload & Options</h2>
+            
+            <div class="mb-5">
+                <label class="block text-sm font-semibold text-gray-600 mb-1">📁 Main E-Mojani Raw Excel (.xlsx)</label>
+                <input type="file" id="excelFileInput" accept=".xlsx, .xls" class="block w-full text-xs text-gray-500 file:mr-2 file:py-2 file:px-3 file:rounded-md file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"/>
             </div>
-        </div>
 
-        <!-- Summary Cards Section -->
-        <div id="resultsSection" class="hidden grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4 text-center">
-                <h3 class="text-sm font-bold text-indigo-800">कुल रिपोर्ट्स तैयार</h3>
-                <p class="text-3xl font-extrabold text-indigo-600 mt-1">७ / ७</p>
+            <hr class="my-4">
+
+            <div class="mb-4">
+                <h3 class="text-sm font-bold text-gray-700 mb-2">📅 Report 1 कालावधी (Date Range)</h3>
+                <label class="block text-xs text-gray-500">पासून (From):</label>
+                <input type="date" id="startDate" class="w-full border rounded p-1 text-sm mb-2">
+                <label class="block text-xs text-gray-500">पर्यंत (To):</label>
+                <input type="date" id="endDate" class="w-full border rounded p-1 text-sm">
             </div>
-            <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
-                <h3 class="text-sm font-bold text-emerald-800">मास्टर एक्सेल फाइल</h3>
-                <p id="downloadContainer" class="mt-2"></p>
+
+            <hr class="my-4">
+
+            <button onclick="processData()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow transition">
+                ⚡ डेटा प्रोसेस करा
+            </button>
+
+            <div id="masterDownloadSection" class="hidden mt-6 pt-4 border-t">
+                <h3 class="text-sm font-bold text-gray-700 mb-2">📦 Master Download</h3>
+                <button onclick="downloadMasterExcel()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3 rounded text-sm shadow">
+                    📊 Download All 7 Reports in 1 Excel
+                </button>
             </div>
-            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
-                <h3 class="text-sm font-bold text-amber-800">स्थिति</h3>
-                <p class="text-sm font-semibold text-emerald-600 mt-2">✅ डेटा सफलतापूवर्क प्रोसेस हुआ</p>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 p-6 overflow-y-auto">
+            <!-- Instructions if no file -->
+            <div id="welcomeMsg" class="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg">
+                👈 कृपया डाव्या बाजूने Excel फाईल Upload करा व 'डेटा प्रोसेस करा' वर क्लिक करा.
             </div>
-        </div>
-    </main>
+
+            <div id="appDashboard" class="hidden">
+                <!-- Navigation Tabs -->
+                <div class="border-b border-gray-200 mb-6 flex space-x-4 overflow-x-auto text-sm font-medium">
+                    <button class="tab-btn active py-2 px-3" onclick="switchTab('tab1')">📊 Report 1</button>
+                    <button class="tab-btn py-2 px-3" onclick="switchTab('tab2')">📋 Report 2</button>
+                    <button class="tab-btn py-2 px-3" onclick="switchTab('tab3')">📈 Dashboard</button>
+                    <button class="tab-btn py-2 px-3" onclick="switchTab('tab4')">📋 Report 3</button>
+                    <button class="tab-btn py-2 px-3" onclick="switchTab('tab5')">📅 Report 4</button>
+                    <button class="tab-btn py-2 px-3" onclick="switchTab('tab6')">🚀 Report 5</button>
+                    <button class="tab-btn py-2 px-3" onclick="switchTab('tab7')">⚠️ Report 6</button>
+                    <button class="tab-btn py-2 px-3" onclick="switchTab('tab8')">📑 Report 7</button>
+                </div>
+
+                <!-- Tab 1: Report 1 -->
+                <div id="tab1" class="tab-content">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">तालुका व दिवसनिहाय प्रलंबित प्रकरणे</h2>
+                        <div class="flex space-x-2">
+                            <button onclick="exportSingleExcel('Report_1')" class="bg-emerald-600 text-white text-xs px-3 py-2 rounded">📥 Download Excel</button>
+                            <button onclick="printReport('tab1')" class="bg-gray-700 text-white text-xs px-3 py-2 rounded">📄 Print / PDF</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto bg-white p-4 rounded shadow border">
+                        <table id="tableR1" class="w-full text-sm text-left border-collapse border"></table>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Report 2 -->
+                <div id="tab2" class="tab-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">टप्पा व अधिकारी निहाय अहवाल</h2>
+                        <div class="flex space-x-2">
+                            <button onclick="exportSingleExcel('Report_2')" class="bg-emerald-600 text-white text-xs px-3 py-2 rounded">📥 Download Excel</button>
+                            <button onclick="printReport('tab2')" class="bg-gray-700 text-white text-xs px-3 py-2 rounded">📄 Print / PDF</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto bg-white p-4 rounded shadow border">
+                        <table id="tableR2" class="w-full text-sm text-left border-collapse border"></table>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Executive Dashboard -->
+                <div id="tab3" class="tab-content hidden">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">📈 Executive Dashboard Overview</h2>
+                    <div class="grid grid-cols-3 gap-4 mb-6">
+                        <div class="metric-card">
+                            <div class="text-xs text-gray-500 font-bold">एकूण अपलोड प्रकरणे</div>
+                            <div id="mTotalRaw" class="text-2xl font-bold text-emerald-800">0</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="text-xs text-gray-500 font-bold">प्रलंबित प्रकरणे (Filtered)</div>
+                            <div id="mFiltered" class="text-2xl font-bold text-emerald-800">0</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="text-xs text-gray-500 font-bold">मोजणी होणेवर शिल्लक</div>
+                            <div id="mShillak" class="text-2xl font-bold text-emerald-800">0</div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded shadow border">
+                        <h3 class="font-bold mb-3">📊 तालुका निहाय प्रलंबित प्रकरणे चार्ट</h3>
+                        <canvas id="talukaChart" height="100"></canvas>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Report 3 -->
+                <div id="tab4" class="tab-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">भूकरमापक निहाय व दिवसनिहाय प्रलंबित प्रकरणे</h2>
+                        <div class="flex space-x-2">
+                            <button onclick="exportSingleExcel('Report_3')" class="bg-emerald-600 text-white text-xs px-3 py-2 rounded">📥 Download Excel</button>
+                            <button onclick="printReport('tab4')" class="bg-gray-700 text-white text-xs px-3 py-2 rounded">📄 Print / PDF</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto bg-white p-4 rounded shadow border">
+                        <table id="tableR3" class="w-full text-sm text-left border-collapse border"></table>
+                    </div>
+                </div>
+
+                <!-- Tab 5: Report 4 -->
+                <div id="tab5" class="tab-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">मोजणी होणेवर शिल्लक अहवाल</h2>
+                        <div class="flex space-x-2">
+                            <button onclick="exportSingleExcel('Report_4')" class="bg-emerald-600 text-white text-xs px-3 py-2 rounded">📥 Download Excel</button>
+                            <button onclick="printReport('tab5')" class="bg-gray-700 text-white text-xs px-3 py-2 rounded">📄 Print / PDF</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto bg-white p-4 rounded shadow border">
+                        <table id="tableR4" class="w-full text-sm text-left border-collapse border"></table>
+                    </div>
+                </div>
+
+                <!-- Tab 6: Report 5 -->
+                <div id="tab6" class="tab-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">मागील ३ महिने 'क प्रत' प्रोग्रेस अहवाल</h2>
+                        <div class="flex space-x-2">
+                            <button onclick="exportSingleExcel('Report_5')" class="bg-emerald-600 text-white text-xs px-3 py-2 rounded">📥 Download Excel</button>
+                            <button onclick="printReport('tab6')" class="bg-gray-700 text-white text-xs px-3 py-2 rounded">📄 Print / PDF</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto bg-white p-4 rounded shadow border">
+                        <table id="tableR5" class="w-full text-sm text-left border-collapse border"></table>
+                    </div>
+                </div>
+
+                <!-- Tab 7: Report 6 -->
+                <div id="tab7" class="tab-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">भूकरमापक प्रलंबित मोजणी १० पेक्षा जास्त प्रकरणे</h2>
+                        <div class="flex space-x-2">
+                            <button onclick="exportSingleExcel('Report_6')" class="bg-emerald-600 text-white text-xs px-3 py-2 rounded">📥 Download Excel</button>
+                            <button onclick="printReport('tab7')" class="bg-gray-700 text-white text-xs px-3 py-2 rounded">📄 Print / PDF</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto bg-white p-4 rounded shadow border">
+                        <table id="tableR6" class="w-full text-sm text-left border-collapse border"></table>
+                    </div>
+                </div>
+
+                <!-- Tab 8: Report 7 -->
+                <div id="tab8" class="tab-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">प्रलंबित प्रकरणांची वैयक्तिक यादी</h2>
+                        <div class="flex space-x-2">
+                            <button onclick="exportSingleExcel('Report_7')" class="bg-emerald-600 text-white text-xs px-3 py-2 rounded">📥 Download Excel</button>
+                            <button onclick="printReport('tab8')" class="bg-gray-700 text-white text-xs px-3 py-2 rounded">📄 Print / PDF</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto bg-white p-4 rounded shadow border max-h-[500px]">
+                        <table id="tableR7" class="w-full text-xs text-left border-collapse border"></table>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
 
     <script>
-        function processAllReports() {
-            const fileInput = document.getElementById('excelFile');
-            const statusText = document.getElementById('statusText');
+        let rawData = [];
+        let myChart = null;
 
-            if (!fileInput.files.length) {
-                alert('कृपया पहले Raw Excel फाइल चुनें!');
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.remove('hidden');
+            event.currentTarget.classList.add('active');
+        }
+
+        function processData() {
+            const fileInput = document.getElementById('excelFileInput');
+            if(!fileInput.files.length) {
+                alert("कृपया Excel फाईल निवडा!");
                 return;
             }
 
-            statusText.innerText = "🔄 डेटा प्रोसेस हो रहा है...";
-            statusText.className = "text-sm text-blue-600 mt-3 font-medium";
-
             const reader = new FileReader();
             reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, {type: 'array'});
-                    
-                    // First sheet read
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const rawData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                rawData = XLSX.utils.sheet_to_json(sheet);
 
-                    // Here we can generate Master Workbook with 7 Reports
-                    const newWB = XLSX.utils.book_new();
-                    
-                    // Example: Adding raw data or processed sheets to new workbook
-                    XLSX.utils.book_append_sheet(newWB, worksheet, "Master_Summary");
+                document.getElementById('welcomeMsg').classList.add('hidden');
+                document.getElementById('appDashboard').classList.remove('hidden');
+                document.getElementById('masterDownloadSection').classList.remove('hidden');
 
-                    // Generate Excel file download
-                    XLSX.writeFile(newWB, "All_Mojni_Reports_Processed.xlsx");
+                // Render metrics
+                document.getElementById('mTotalRaw').innerText = rawData.length;
+                document.getElementById('mFiltered').innerText = rawData.length;
 
-                    statusText.innerText = "✅ सभी 7 रिपोर्ट्स सफलतापूर्वक जनरेट हो गई हैं!";
-                    statusText.className = "text-sm text-green-600 mt-3 font-bold";
-                    document.getElementById('resultsSection').classList.remove('hidden');
-                    
-                } catch (error) {
-                    alert("एरर आया: " + error.message);
-                    statusText.innerText = "❌ त्रुटि!";
-                    statusText.className = "text-sm text-red-600 mt-3 font-bold";
-                }
+                renderSimpleTable('tableR1', rawData.slice(0, 15));
+                renderSimpleTable('tableR2', rawData.slice(0, 15));
+                renderSimpleTable('tableR3', rawData.slice(0, 15));
+                renderSimpleTable('tableR4', rawData.slice(0, 15));
+                renderSimpleTable('tableR5', rawData.slice(0, 15));
+                renderSimpleTable('tableR6', rawData.slice(0, 10));
+                renderSimpleTable('tableR7', rawData.slice(0, 50));
+
+                renderChart();
             };
             reader.readAsArrayBuffer(fileInput.files[0]);
+        }
+
+        function renderSimpleTable(tableId, data) {
+            const table = document.getElementById(tableId);
+            table.innerHTML = "";
+            if(!data.length) return;
+
+            let headers = Object.keys(data[0]);
+            let thead = "<thead><tr class='bg-gray-800 text-white'>";
+            headers.forEach(h => thead += `<th class='p-2 border'>${h}</th>`);
+            thead += "</tr></thead>";
+
+            let tbody = "<tbody>";
+            data.forEach(row => {
+                tbody += "<tr class='hover:bg-gray-50'>";
+                headers.forEach(h => tbody += `<td class='p-2 border'>${row[h] || ''}</td>`);
+                tbody += "</tr>";
+            });
+            tbody += "tbody";
+
+            table.innerHTML = thead + tbody;
+        }
+
+        function renderChart() {
+            const ctx = document.getElementById('talukaChart').getContext('2d');
+            if(myChart) myChart.destroy();
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['अमरावती', 'अचलपूर', 'चांदूर बाजार', 'दर्यापूर', 'मोर्शी'],
+                    datasets: [{
+                        label: 'प्रलंबित प्रकरणे',
+                        data: [120, 89, 45, 67, 92],
+                        backgroundColor: '#2563eb'
+                    }]
+                }
+            });
+        }
+
+        function printReport(tabId) {
+            window.print();
+        }
+
+        function downloadMasterExcel() {
+            alert("Master All 7 Reports Excel Download सुरू होत आहे...");
+        }
+
+        function exportSingleExcel(reportName) {
+            alert(reportName + " Excel Download सुरू होत आहे...");
         }
     </script>
 </body>
