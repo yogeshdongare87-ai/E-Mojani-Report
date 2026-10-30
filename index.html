@@ -3,27 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>E-Mojani Filtered Pending Report Generator & Dashboard</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <!-- SheetJS for Excel handling -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- Chart.js for Dashboard -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>भूमि अभिलेख विभाग - अमरावती | प्रलंबित मोजणी अहवाल</title>
+    <!-- SheetJS Excel Processing Library -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
-        .sidebar { width: 320px; flex-shrink: 0; }
-        .tab-btn.active { border-bottom: 3px solid #2563eb; color: #2563eb; font-weight: bold; }
-        .metric-card { background: #f8fafc; border-left: 6px solid #16a34a; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f4f6f9; }
+        .header { background: #1f4e78; color: white; padding: 15px; text-align: center; border-radius: 8px; }
+        .card { background: white; padding: 20px; margin-top: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .metrics-grid { display: flex; gap: 20px; margin-top: 15px; }
+        .metric-card { flex: 1; background: #f8f9fa; border-left: 6px solid #2b9348; padding: 15px; border-radius: 8px; text-align: center; }
+        .metric-title { font-size: 14px; color: #555; font-weight: 600; }
+        .metric-value { font-size: 26px; color: #1b4332; font-weight: bold; margin-top: 5px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 13px; }
+        th { background-color: #1f4e78; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+        input[type="file"] { margin: 10px 0; }
     </style>
 </head>
-<body class="bg-gray-100 font-sans min-h-screen flex flex-col">
+<body>
 
-    <!-- Header -->
-    <header class="bg-white border-b shadow-sm py-4 px-6 text-center">
-        <h1 class="text-2xl font-bold text-gray-800">📊 भूमि अभिलेख विभाग - अमरावती | प्रलंबित मोजणी अहवाल व डॅशबोर्ड</h1>
-    </header>
+    <div class="header">
+        <h2>📊 भूमि अभिलेख विभाग - अमरावती</h2>
+        <p>प्रलंबित मोजणी अहवाल व डॅशबोर्ड</p>
+    </div>
 
-    <div class="flex flex-1 overflow-hidden">
-        <!-- Sidebar -->
-        <aside class="sidebar bg-white border-r p-5 overflow-y-auto">
-            <h
+    <div class="card">
+        <h3>📁 Excel फाईल अपलोड करा (.xlsx)</h3>
+        <input type="file" id="excelFile" accept=".xlsx" />
+    </div>
+
+    <div class="metrics-grid" id="metricsSection" style="display: none;">
+        <div class="metric-card">
+            <div class="metric-title">एकूण अपलोड प्रकरणे</div>
+            <div class="metric-value" id="totalCases">0</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">प्रलंबित प्रकरणे</div>
+            <div class="metric-value" id="pendingCases">0</div>
+        </div>
+    </div>
+
+    <div class="card" id="reportSection" style="display: none;">
+        <h3>📋 तालुका व दिवसनिहाय प्रलंबित मोजणी अहवाल</h3>
+        <div style="overflow-x: auto;">
+            <table id="reportTable">
+                <thead>
+                    <tr id="tableHeader"></tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('excelFile').addEventListener('change', handleFile, false);
+
+        function handleFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, {defval: ""});
+
+                processData(jsonData);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processData(data) {
+            if (data.length === 0) return;
+
+            document.getElementById('metricsSection').style.display = 'flex';
+            document.getElementById('reportSection').style.display = 'block';
+
+            document.getElementById('totalCases').innerText = data.length;
+
+            // Display raw sample data
+            const headers = Object.keys(data[0]);
+            const headerRow = document.getElementById('tableHeader');
+            const bodyRow = document.getElementById('tableBody');
+
+            headerRow.innerHTML = '';
+            bodyRow.innerHTML = '';
+
+            headers.forEach(h => {
+                const th = document.createElement('th');
+                th.innerText = h;
+                headerRow.appendChild(th);
+            });
+
+            data.slice(0, 50).forEach(row => {
+                const tr = document.createElement('tr');
+                headers.forEach(h => {
+                    const td = document.createElement('td');
+                    td.innerText = row[h] || '';
+                    tr.appendChild(td);
+                });
+                bodyRow.appendChild(tr);
+            });
+
+            document.getElementById('pendingCases').innerText = data.length;
+        }
+    </script>
+</body>
+</html>
